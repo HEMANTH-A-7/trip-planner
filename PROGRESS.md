@@ -165,7 +165,7 @@ before sending the itinerary to the API as refinement context.
     targets) but hasn't been visually confirmed at e.g. 375px. **Needs a real
     check** (phone, or Chrome DevTools device toolbar) before calling this done.
 17. [x] Finalize README (setup, usage, AI-usage note, limitations, time spent)
-18. [ ] `gh repo create` (public) + push — **confirm with user first**
+18. [x] `gh repo create` (public) + push — https://github.com/HEMANTH-A-7/trip-planner
 
 Update the checkboxes above as steps complete. If you're picking this project
 back up in a new session, `git log --oneline` plus this checklist tells you
@@ -230,7 +230,18 @@ exactly where things stand.
 
 ## Open items / things to do next
 
-- Actually verify mobile layout on a real narrow viewport (step 16).
-- Finalize README: usage section, AI-usage note, known limitations
-  (including the two API keys having been pasted in chat), time spent.
-- Confirm with the user before `gh repo create` + push (step 18).
+Everything from the original plan is done and pushed:
+https://github.com/HEMANTH-A-7/trip-planner (public).
+
+- **Actually verify mobile layout on a real narrow viewport** (step 16) —
+  still outstanding, couldn't be done from within this tool environment.
+  Check on a real phone or Chrome DevTools' device toolbar before treating
+  the mobile requirement as fully verified.
+- Adjust the "Time spent" figure in README.md to your own actual elapsed
+  time — the number currently there is an estimate written from the
+  assistant's side of the session, not a real clock measurement.
+- Consider rotating the Gemini/OpenRouter keys used during development
+  (see README's AI-usage note) since they were pasted into chat rather than
+  typed directly into `.env.local`.
+- Record the screen-recording the assignment asks for (not something this
+  session can produce) before final submission.
