@@ -183,8 +183,9 @@ before sending the itinerary to the API as refinement context.
     the first rather than stacking). Verified live.
 22. [x] Example prompt chips (`components/ExamplePrompts.js`) — populate,
     don't auto-submit; hidden once an itinerary exists. Verified live.
-23. [ ] Deploy to Vercel — user confirmed they have an account; import the
-    GitHub repo, set `GEMINI_API_KEY`/`OPENROUTER_API_KEY` env vars, deploy.
+23. [x] Deployed to Vercel — https://trip-planner-dusky-nine.vercel.app
+    (project: hemanth-a-7s-projects/trip-planner). Both env vars set,
+    verified live with a real generation in production.
 
 Update the checkboxes above as steps complete. If you're picking this project
 back up in a new session, `git log --oneline` plus this checklist tells you
