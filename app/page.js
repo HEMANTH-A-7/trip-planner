@@ -1,64 +1,161 @@
-import Image from "next/image";
+"use client";
+
+import { useRef, useState } from "react";
+import TripForm from "@/components/TripForm";
+import LoadingState from "@/components/LoadingState";
+import ErrorState from "@/components/ErrorState";
+import EmptyState from "@/components/EmptyState";
+import ItineraryView from "@/components/ItineraryView";
+
+// Slightly above the server's own 30s timeout, so if the server hangs for
+// any reason (cold start, network stall) the client still recovers on its
+// own instead of spinning forever.
+const CLIENT_TIMEOUT_MS = 35_000;
+
+const STATUS = { IDLE: "idle", LOADING: "loading", ERROR: "error", SUCCESS: "success" };
+
+function removeStop(itinerary, dayId, stopId) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) =>
+      day.id !== dayId
+        ? day
+        : { ...day, stops: day.stops.filter((s) => s.id !== stopId) }
+    ),
+  };
+}
+
+function moveStop(itinerary, dayId, stopId, direction) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) => {
+      if (day.id !== dayId) return day;
+      const index = day.stops.findIndex((s) => s.id === stopId);
+      const target = index + direction;
+      if (index === -1 || target < 0 || target >= day.stops.length) return day;
+      const stops = [...day.stops];
+      [stops[index], stops[target]] = [stops[target], stops[index]];
+      return { ...day, stops };
+    }),
+  };
+}
 
 export default function Home() {
+  const [status, setStatus] = useState(STATUS.IDLE);
+  const [error, setError] = useState(null);
+  const [itinerary, setItinerary] = useState(null);
+
+  // Guards against the classic race: two requests in flight, the older one
+  // resolves after the newer one. requestIdRef.current only ever moves
+  // forward, so a response can check "am I still the most recent request?"
+  // before touching state. abortControllerRef additionally cancels the
+  // outdated network request outright instead of just ignoring its result.
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
+  const lastPromptRef = useRef("");
+
+  async function runRequest(mode, prompt) {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const isStale = () => requestIdRef.current !== requestId;
+
+    lastPromptRef.current = prompt;
+    setStatus(STATUS.LOADING);
+    setError(null);
+
+    const timeout = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/plan-trip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          mode === "refine"
+            ? { prompt, mode, itinerary }
+            : { prompt, mode: "create" }
+        ),
+        signal: controller.signal,
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (isStale()) return; // a newer request has since taken over
+
+      if (!res.ok || !data) {
+        setError({
+          message: data?.message ?? "Something went wrong. Please try again.",
+        });
+        setStatus(STATUS.ERROR);
+        return;
+      }
+
+      setItinerary(data.itinerary);
+      setStatus(STATUS.SUCCESS);
+    } catch (err) {
+      if (isStale()) return; // superseded by a newer request; ignore silently
+      const message =
+        err.name === "AbortError"
+          ? "That took too long. Please try again."
+          : "Network error — check your connection and try again.";
+      setError({ message });
+      setStatus(STATUS.ERROR);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function handleCreate(prompt) {
+    runRequest("create", prompt);
+  }
+
+  function handleRetry() {
+    runRequest("create", lastPromptRef.current);
+  }
+
+  function handleRemoveStop(dayId, stopId) {
+    setItinerary((prev) => removeStop(prev, dayId, stopId));
+  }
+
+  function handleMoveStop(dayId, stopId, direction) {
+    setItinerary((prev) => moveStop(prev, dayId, stopId, direction));
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
+    <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-black sm:px-6">
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+        <header>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            Trip Planner
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Describe a trip in plain language and get an editable, day-by-day
+            itinerary.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        </header>
+
+        <TripForm onSubmit={handleCreate} disabled={status === STATUS.LOADING} />
+
+        {status === STATUS.LOADING && <LoadingState />}
+        {status === STATUS.ERROR && (
+          <ErrorState message={error?.message} onRetry={handleRetry} />
+        )}
+        {status === STATUS.IDLE && <EmptyState />}
+        {status === STATUS.SUCCESS && itinerary && (
+          <ItineraryView
+            itinerary={itinerary}
+            onRemoveStop={handleRemoveStop}
+            onMoveStop={handleMoveStop}
+          />
+        )}
       </main>
     </div>
   );
