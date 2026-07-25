@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TripForm from "@/components/TripForm";
 import LoadingState from "@/components/LoadingState";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import ItineraryView from "@/components/ItineraryView";
+import { loadSession, saveSession } from "@/lib/storage";
+import { stripIds } from "@/lib/schema";
 
 // Slightly above the server's own 30s timeout, so if the server hangs for
 // any reason (cold start, network stall) the client still recovers on its
@@ -60,6 +62,7 @@ export default function Home() {
   const [status, setStatus] = useState(STATUS.IDLE);
   const [error, setError] = useState(null);
   const [itinerary, setItinerary] = useState(null);
+  const [promptText, setPromptText] = useState("");
 
   // Guards against the classic race: two requests in flight, the older one
   // resolves after the newer one. requestIdRef.current only ever moves
@@ -69,6 +72,40 @@ export default function Home() {
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef(null);
   const lastPromptRef = useRef("");
+  // So Retry re-runs whichever action actually failed: retrying a failed
+  // refinement must re-apply the edit, not silently fall back to
+  // regenerating the whole itinerary from scratch.
+  const lastRequestModeRef = useRef("create");
+  const [refinePromptText, setRefinePromptText] = useState("");
+
+  // Restore a previous session on load. Deliberately an effect rather than a
+  // lazy useState initializer: a lazy initializer would run during the
+  // client's first (hydration) render and return different output than the
+  // server-rendered HTML (which has no access to localStorage), causing a
+  // hydration mismatch. Running this post-mount, client-only, is correct
+  // here despite the lint rule's generic advice against setState-in-effect.
+  useEffect(() => {
+    const session = loadSession();
+    if (!session) return;
+    /* eslint-disable react-hooks/set-state-in-effect --
+       one-time hydration from localStorage, see comment above */
+    setItinerary(session.itinerary);
+    setStatus(STATUS.SUCCESS);
+    setPromptText(session.prompt ?? "");
+    /* eslint-enable react-hooks/set-state-in-effect */
+    lastPromptRef.current = session.prompt ?? "";
+  }, []);
+
+  // Save-as-you-go: every change (generate, remove, reorder, tick a
+  // checklist item) persists so a reload picks up where you left off. Saves
+  // promptText (the original trip description) rather than
+  // lastPromptRef.current, which tracks whichever request ran most
+  // recently and would leak a refinement instruction into the main field.
+  useEffect(() => {
+    if (status === STATUS.SUCCESS && itinerary) {
+      saveSession({ itinerary, prompt: promptText });
+    }
+  }, [itinerary, status, promptText]);
 
   async function runRequest(mode, prompt) {
     abortControllerRef.current?.abort();
@@ -80,6 +117,7 @@ export default function Home() {
     const isStale = () => requestIdRef.current !== requestId;
 
     lastPromptRef.current = prompt;
+    lastRequestModeRef.current = mode;
     setStatus(STATUS.LOADING);
     setError(null);
 
@@ -91,7 +129,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           mode === "refine"
-            ? { prompt, mode, itinerary }
+            ? { prompt, mode, itinerary: stripIds(itinerary) }
             : { prompt, mode: "create" }
         ),
         signal: controller.signal,
@@ -116,25 +154,33 @@ export default function Home() {
 
       setItinerary(data.itinerary);
       setStatus(STATUS.SUCCESS);
+      return true;
     } catch (err) {
-      if (isStale()) return; // superseded by a newer request; ignore silently
+      if (isStale()) return false; // superseded by a newer request; ignore silently
       const message =
         err.name === "AbortError"
           ? "That took too long. Please try again."
           : "Network error — check your connection and try again.";
       setError({ message });
       setStatus(STATUS.ERROR);
+      return false;
     } finally {
       clearTimeout(timeout);
     }
   }
 
   function handleCreate(prompt) {
+    setPromptText(prompt);
     runRequest("create", prompt);
   }
 
   function handleRetry() {
-    runRequest("create", lastPromptRef.current);
+    runRequest(lastRequestModeRef.current, lastPromptRef.current);
+  }
+
+  async function handleRefine(prompt) {
+    const ok = await runRequest("refine", prompt);
+    if (ok) setRefinePromptText(""); // ready for the next follow-up
   }
 
   function handleRemoveStop(dayId, stopId) {
@@ -162,20 +208,45 @@ export default function Home() {
           </p>
         </header>
 
-        <TripForm onSubmit={handleCreate} disabled={status === STATUS.LOADING} />
+        <TripForm
+          value={promptText}
+          onChange={setPromptText}
+          onSubmit={handleCreate}
+          disabled={status === STATUS.LOADING}
+        />
 
         {status === STATUS.LOADING && <LoadingState />}
         {status === STATUS.ERROR && (
           <ErrorState message={error?.message} onRetry={handleRetry} />
         )}
-        {status === STATUS.IDLE && <EmptyState />}
-        {status === STATUS.SUCCESS && itinerary && (
-          <ItineraryView
-            itinerary={itinerary}
-            onRemoveStop={handleRemoveStop}
-            onMoveStop={handleMoveStop}
-            onToggleChecklistItem={handleToggleChecklistItem}
-          />
+        {status === STATUS.IDLE && !itinerary && <EmptyState />}
+
+        {/* Rendered whenever we HAVE an itinerary, independent of the status
+            above - a failed refinement only means the *attempted* edit
+            didn't apply; the existing itinerary is still valid and
+            shouldn't disappear behind its own error message. Hidden while a
+            request is in flight so it's unambiguous which itinerary (old or
+            incoming) is on screen. */}
+        {itinerary && status !== STATUS.LOADING && (
+          <>
+            <TripForm
+              id="refine-prompt"
+              label="Refine this itinerary"
+              placeholder="e.g. swap day 2's museum for something outdoors"
+              submitLabel="Apply change"
+              pendingLabel="Applying…"
+              value={refinePromptText}
+              onChange={setRefinePromptText}
+              onSubmit={handleRefine}
+              disabled={status === STATUS.LOADING}
+            />
+            <ItineraryView
+              itinerary={itinerary}
+              onRemoveStop={handleRemoveStop}
+              onMoveStop={handleMoveStop}
+              onToggleChecklistItem={handleToggleChecklistItem}
+            />
+          </>
         )}
       </main>
     </div>
