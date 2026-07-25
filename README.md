@@ -5,6 +5,8 @@ day-by-day itinerary — an LLM returns structured JSON, which this app parses
 and renders as interactive components (cards, a chart, checklists). Not a
 chatbot: there's no chat log, just a form and a result you can edit.
 
+**Live:** https://trip-planner-dusky-nine.vercel.app
+
 ## Setup
 
 ```bash
