@@ -1,6 +1,12 @@
 import DayCard from "./DayCard";
+import TripOverviewChart from "./TripOverviewChart";
 
-export default function ItineraryView({ itinerary, onRemoveStop, onMoveStop }) {
+export default function ItineraryView({
+  itinerary,
+  onRemoveStop,
+  onMoveStop,
+  onToggleChecklistItem,
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -13,12 +19,14 @@ export default function ItineraryView({ itinerary, onRemoveStop, onMoveStop }) {
           </p>
         )}
       </div>
+      <TripOverviewChart itinerary={itinerary} />
       {itinerary.days.map((day) => (
         <DayCard
           key={day.id}
           day={day}
           onRemoveStop={onRemoveStop}
           onMoveStop={onMoveStop}
+          onToggleChecklistItem={onToggleChecklistItem}
         />
       ))}
     </div>

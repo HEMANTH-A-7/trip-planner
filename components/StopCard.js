@@ -1,15 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const CATEGORY_LABELS = {
-  food: "🍜 Food",
-  sightseeing: "🏛️ Sightseeing",
-  lodging: "🛏️ Lodging",
-  transport: "🚆 Transport",
-  activity: "🎟️ Activity",
-  other: "📍 Other",
-};
+import { CATEGORY_LABELS } from "@/lib/categories";
 
 export default function StopCard({
   stop,
@@ -69,7 +61,7 @@ export default function StopCard({
             onClick={onMoveUp}
             disabled={isFirst}
             aria-label={`Move "${stop.name}" earlier`}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             ▲
           </button>
@@ -78,7 +70,7 @@ export default function StopCard({
             onClick={onMoveDown}
             disabled={isLast}
             aria-label={`Move "${stop.name}" later`}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             ▼
           </button>
@@ -88,7 +80,7 @@ export default function StopCard({
           type="button"
           onClick={onRemove}
           aria-label={`Remove "${stop.name}"`}
-          className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
         >
           ✕
         </button>

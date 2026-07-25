@@ -40,6 +40,22 @@ function moveStop(itinerary, dayId, stopId, direction) {
   };
 }
 
+function toggleChecklistItem(itinerary, dayId, itemId) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) =>
+      day.id !== dayId
+        ? day
+        : {
+            ...day,
+            packingChecklist: day.packingChecklist?.map((item) =>
+              item.id === itemId ? { ...item, checked: !item.checked } : item
+            ),
+          }
+    ),
+  };
+}
+
 export default function Home() {
   const [status, setStatus] = useState(STATUS.IDLE);
   const [error, setError] = useState(null);
@@ -129,6 +145,10 @@ export default function Home() {
     setItinerary((prev) => moveStop(prev, dayId, stopId, direction));
   }
 
+  function handleToggleChecklistItem(dayId, itemId) {
+    setItinerary((prev) => toggleChecklistItem(prev, dayId, itemId));
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-black sm:px-6">
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -154,6 +174,7 @@ export default function Home() {
             itinerary={itinerary}
             onRemoveStop={handleRemoveStop}
             onMoveStop={handleMoveStop}
+            onToggleChecklistItem={handleToggleChecklistItem}
           />
         )}
       </main>

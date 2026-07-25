@@ -1,6 +1,7 @@
 import StopCard from "./StopCard";
+import ChecklistBlock from "./ChecklistBlock";
 
-export default function DayCard({ day, onRemoveStop, onMoveStop }) {
+export default function DayCard({ day, onRemoveStop, onMoveStop, onToggleChecklistItem }) {
   return (
     <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -25,6 +26,12 @@ export default function DayCard({ day, onRemoveStop, onMoveStop }) {
             />
           ))}
         </ul>
+      )}
+      {day.packingChecklist?.length > 0 && (
+        <ChecklistBlock
+          items={day.packingChecklist}
+          onToggle={(itemId) => onToggleChecklistItem(day.id, itemId)}
+        />
       )}
     </section>
   );

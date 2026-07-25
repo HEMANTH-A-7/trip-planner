@@ -61,6 +61,7 @@ export async function POST(request) {
       abortSignal: timeoutController.signal,
     });
   } catch (err) {
+    console.error("Gemini call failed:", err);
     if (err?.name === "AbortError" || timeoutController.signal.aborted) {
       return errorResponse(
         504,
