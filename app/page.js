@@ -7,6 +7,7 @@ import StreamingPreview from "@/components/StreamingPreview";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import ItineraryView from "@/components/ItineraryView";
+import UndoToast from "@/components/UndoToast";
 import { loadSession, saveSession } from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
 import { parseSSE } from "@/lib/sse";
@@ -15,6 +16,7 @@ import { parseSSE } from "@/lib/sse";
 // any reason (cold start, network stall) the client still recovers on its
 // own instead of spinning forever.
 const CLIENT_TIMEOUT_MS = 35_000;
+const UNDO_TIMEOUT_MS = 5_000;
 
 const STATUS = { IDLE: "idle", LOADING: "loading", ERROR: "error", SUCCESS: "success" };
 
@@ -26,6 +28,18 @@ function removeStop(itinerary, dayId, stopId) {
         ? day
         : { ...day, stops: day.stops.filter((s) => s.id !== stopId) }
     ),
+  };
+}
+
+function insertStopAt(itinerary, dayId, stop, index) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) => {
+      if (day.id !== dayId) return day;
+      const stops = [...day.stops];
+      stops.splice(index, 0, stop);
+      return { ...day, stops };
+    }),
   };
 }
 
@@ -65,6 +79,10 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [itinerary, setItinerary] = useState(null);
   const [promptText, setPromptText] = useState("");
+  // A removed stop isn't gone yet - it's held here with enough to reinsert
+  // it (which day, and at what index) until the undo window lapses.
+  const [pendingUndo, setPendingUndo] = useState(null);
+  const undoTimeoutRef = useRef(null);
 
   // Guards against the classic race: two requests in flight, the older one
   // resolves after the newer one. requestIdRef.current only ever moves
@@ -110,6 +128,12 @@ export default function Home() {
       saveSession({ itinerary, prompt: promptText });
     }
   }, [itinerary, status, promptText]);
+
+  // Not a state-hydration concern like the two effects above - just
+  // clearing a plain timer on unmount so it can't fire setState afterward.
+  useEffect(() => {
+    return () => clearTimeout(undoTimeoutRef.current);
+  }, []);
 
   async function runRequest(mode, prompt) {
     abortControllerRef.current?.abort();
@@ -254,7 +278,26 @@ export default function Home() {
   }
 
   function handleRemoveStop(dayId, stopId) {
+    const day = itinerary.days.find((d) => d.id === dayId);
+    const index = day.stops.findIndex((s) => s.id === stopId);
+    const stop = day.stops[index];
+
+    // Only one undo slot: removing a second stop before the first's toast
+    // expires finalizes the first (no reinsert for it) in favor of the new
+    // one, rather than trying to stack multiple pending undos.
+    clearTimeout(undoTimeoutRef.current);
+    setPendingUndo({ dayId, stop, index });
+    undoTimeoutRef.current = setTimeout(() => setPendingUndo(null), UNDO_TIMEOUT_MS);
+
     setItinerary((prev) => removeStop(prev, dayId, stopId));
+  }
+
+  function handleUndoRemove() {
+    if (!pendingUndo) return;
+    clearTimeout(undoTimeoutRef.current);
+    const { dayId, stop, index } = pendingUndo;
+    setItinerary((prev) => insertStopAt(prev, dayId, stop, index));
+    setPendingUndo(null);
   }
 
   function handleMoveStop(dayId, stopId, direction) {
@@ -324,6 +367,9 @@ export default function Home() {
           </>
         )}
       </main>
+      {pendingUndo && (
+        <UndoToast stopName={pendingUndo.stop.name} onUndo={handleUndoRemove} />
+      )}
     </div>
   );
 }
