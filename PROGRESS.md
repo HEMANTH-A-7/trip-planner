@@ -149,7 +149,9 @@ before sending the itinerary to the API as refinement context.
 5. [x] Gemini API route (`app/api/plan-trip/route.js`) with full error handling + refine mode
 6. [x] TripForm + request lifecycle (loading/error/empty, stale-response guard)
 7. [x] Interactive itinerary UI: expand / remove / reorder stops
-8. [ ] Responsive styling + dark mode + keyboard-nav polish pass (final review)
+8. [x] Responsive styling + dark mode + keyboard-nav polish pass (fade-in on
+    results, focus-visible rings on all icon buttons, verified Tab order +
+    focus rings live in browser)
 9. [x] Stretch: localStorage save/reload session
 10. [x] Stretch: refinement loop (follow-up edits to existing itinerary)
 11. [x] Stretch: packing-checklist block type
@@ -166,6 +168,23 @@ before sending the itinerary to the API as refinement context.
     check** (phone, or Chrome DevTools device toolbar) before calling this done.
 17. [x] Finalize README (setup, usage, AI-usage note, limitations, time spent)
 18. [x] `gh repo create` (public) + push — https://github.com/HEMANTH-A-7/trip-planner
+
+### Post-submission polish (user asked "what else would make this stand out")
+
+19. [x] Sharpened both providers' system prompts: geographic clustering per
+    day, realistic pacing (3-5 stops/day), avoid scheduling around closed
+    hours, vary stops across days. Verified live on a 3-day NYC request.
+20. [x] Vitest suite (`npm test`, 25 tests, no network/API key needed):
+    `lib/schema.test.js` (ItinerarySchema edge cases, the minItems/maxItems
+    regression, normalize/stripIds round-trip, parseAndValidateItinerary)
+    and `lib/providerErrors.test.js` (every classifyGeminiError branch).
+21. [x] Undo toast for stop removal (`components/UndoToast.js`) — 5s window,
+    reinserts at original day/index, single-slot (a second removal finalizes
+    the first rather than stacking). Verified live.
+22. [x] Example prompt chips (`components/ExamplePrompts.js`) — populate,
+    don't auto-submit; hidden once an itinerary exists. Verified live.
+23. [ ] Deploy to Vercel — user confirmed they have an account; import the
+    GitHub repo, set `GEMINI_API_KEY`/`OPENROUTER_API_KEY` env vars, deploy.
 
 Update the checkboxes above as steps complete. If you're picking this project
 back up in a new session, `git log --oneline` plus this checklist tells you
