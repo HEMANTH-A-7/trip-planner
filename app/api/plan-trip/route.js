@@ -1,7 +1,7 @@
-import { ApiError } from "@google/genai";
 import { callGemini } from "@/lib/gemini";
 import { callOpenRouter } from "@/lib/openrouter";
-import { ItinerarySchema, normalizeItinerary } from "@/lib/schema";
+import { ItinerarySchema, parseAndValidateItinerary } from "@/lib/schema";
+import { ProviderError, classifyGeminiError } from "@/lib/providerErrors";
 
 // Gemini can hang or take a very long time on a bad day. Cap it so the
 // request always resolves one way or another within a bounded time, instead
@@ -13,64 +13,6 @@ const MAX_PROMPT_LENGTH = 2000;
 
 function errorResponse(status, code, message) {
   return Response.json({ error: code, message }, { status });
-}
-
-class ProviderError extends Error {
-  constructor(status, code, message) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-// Maps a thrown Gemini error to a user-facing status/code/message. `unavailable`
-// marks the cases where Gemini itself is the problem (quota, bad key) rather
-// than the request - only those are worth retrying against a different
-// provider; a malformed/wrong-shape response is a data problem, not an
-// availability one, so that's handled later, after both providers have had a
-// chance to answer.
-function classifyGeminiError(err, timedOut) {
-  if (timedOut || err?.name === "AbortError") {
-    return {
-      status: 504,
-      code: "timeout",
-      message: "The AI took too long to respond. Please try again.",
-      unavailable: false,
-    };
-  }
-  if (err instanceof ApiError) {
-    if (err.status === 401 || err.status === 403) {
-      return {
-        status: 500,
-        code: "config_error",
-        message: "The server's Gemini API key is missing or invalid.",
-        unavailable: true,
-      };
-    }
-    if (err.status === 429) {
-      return {
-        status: 429,
-        code: "rate_limited",
-        message: "Rate limit reached. Please wait a moment and try again.",
-        unavailable: true,
-      };
-    }
-    return {
-      status: 502,
-      code: "upstream_error",
-      message: "The AI service returned an error. Please try again.",
-      unavailable: false,
-    };
-  }
-  if (err instanceof Error && err.message.includes("GEMINI_API_KEY")) {
-    return { status: 500, code: "config_error", message: err.message, unavailable: true };
-  }
-  return {
-    status: 502,
-    code: "upstream_error",
-    message: "Couldn't reach the AI service. Please try again.",
-    unavailable: false,
-  };
 }
 
 // Tries Gemini first (the primary, fully-validated provider). If Gemini is
@@ -161,30 +103,9 @@ export async function POST(request) {
     clearTimeout(timeout);
   }
 
-  // Never trust the model actually followed the schema — parse defensively.
-  let parsedJson;
-  try {
-    parsedJson = JSON.parse(rawText);
-  } catch {
-    return errorResponse(
-      502,
-      "bad_json",
-      "The AI returned malformed data. Please try again."
-    );
+  const result = parseAndValidateItinerary(rawText);
+  if (!result.ok) {
+    return errorResponse(502, result.code, result.message);
   }
-
-  const validation = ItinerarySchema.safeParse(parsedJson);
-  if (!validation.success) {
-    console.error(
-      "AI response failed schema validation:",
-      validation.error.issues
-    );
-    return errorResponse(
-      502,
-      "bad_shape",
-      "The AI's response didn't match the expected format. Please try again."
-    );
-  }
-
-  return Response.json({ itinerary: normalizeItinerary(validation.data) });
+  return Response.json({ itinerary: result.itinerary });
 }

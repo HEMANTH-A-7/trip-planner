@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import TripForm from "@/components/TripForm";
 import LoadingState from "@/components/LoadingState";
+import StreamingPreview from "@/components/StreamingPreview";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import ItineraryView from "@/components/ItineraryView";
 import { loadSession, saveSession } from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
+import { parseSSE } from "@/lib/sse";
 
 // Slightly above the server's own 30s timeout, so if the server hangs for
 // any reason (cold start, network stall) the client still recovers on its
@@ -77,6 +79,8 @@ export default function Home() {
   // regenerating the whole itinerary from scratch.
   const lastRequestModeRef = useRef("create");
   const [refinePromptText, setRefinePromptText] = useState("");
+  // null = not streaming; "" or more = live text accumulated so far.
+  const [streamingText, setStreamingText] = useState(null);
 
   // Restore a previous session on load. Deliberately an effect rather than a
   // lazy useState initializer: a lazy initializer would run during the
@@ -169,9 +173,75 @@ export default function Home() {
     }
   }
 
+  // Streams the initial generation for a live preview, then falls back to
+  // the plain (non-streaming) request - which still has the full
+  // Gemini -> OpenRouter chain - if streaming fails for any reason. See
+  // app/api/plan-trip/stream/route.js for why streaming itself has no
+  // fallback of its own.
+  async function runStreamingCreate(prompt) {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const isStale = () => requestIdRef.current !== requestId;
+
+    lastPromptRef.current = prompt;
+    lastRequestModeRef.current = "create";
+    setStatus(STATUS.LOADING);
+    setError(null);
+    setStreamingText("");
+
+    const timeout = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/plan-trip/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        throw new Error("Streaming endpoint unavailable");
+      }
+
+      for await (const event of parseSSE(res)) {
+        if (isStale()) return; // a newer request has since taken over
+
+        if (event.type === "chunk") {
+          setStreamingText((prev) => (prev ?? "") + event.text);
+        } else if (event.type === "done") {
+          setStreamingText(null);
+          setItinerary(event.itinerary);
+          setStatus(STATUS.SUCCESS);
+          return;
+        } else if (event.type === "error") {
+          throw new Error(event.message || "Streaming failed");
+        }
+      }
+      throw new Error("Stream ended without a result");
+    } catch (err) {
+      if (isStale()) return; // superseded; the newer request owns the UI now
+      setStreamingText(null);
+      if (err.name === "AbortError") {
+        setError({ message: "That took too long. Please try again." });
+        setStatus(STATUS.ERROR);
+        return;
+      }
+      console.warn(
+        "Streaming generation failed, falling back to a plain request:",
+        err
+      );
+      await runRequest("create", prompt);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   function handleCreate(prompt) {
     setPromptText(prompt);
-    runRequest("create", prompt);
+    runStreamingCreate(prompt);
   }
 
   function handleRetry() {
@@ -215,7 +285,12 @@ export default function Home() {
           disabled={status === STATUS.LOADING}
         />
 
-        {status === STATUS.LOADING && <LoadingState />}
+        {status === STATUS.LOADING &&
+          (streamingText !== null ? (
+            <StreamingPreview text={streamingText} />
+          ) : (
+            <LoadingState />
+          ))}
         {status === STATUS.ERROR && (
           <ErrorState message={error?.message} onRetry={handleRetry} />
         )}
