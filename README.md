@@ -22,6 +22,10 @@ Open http://localhost:3000.
 `OPENROUTER_API_KEY` in `.env.local` is optional — see "Provider fallback"
 below. Without it, the app still works fully on Gemini alone.
 
+Run the test suite with `npm test` (Vitest — unit tests for the Zod schema,
+JSON parse/validate path, and provider error classification; no network
+calls, no API key needed).
+
 ## Usage
 
 1. Describe a trip in the main box (destination, rough length, interests —
@@ -121,10 +125,12 @@ key straight into a local file — worth rotating if that matters to you.
   to avoid adding another AI-generated field that would need its own
   sanity-checking, but it does mean the model isn't actually asked to
   produce "a chart block" itself.
-- **No automated test suite.** Everything here was verified by hand against
-  the real Gemini/OpenRouter APIs in a running browser (see `PROGRESS.md` for
-  what was specifically tested and which bugs that testing caught), not unit
-  or integration tests.
+- **Unit tests cover the validation layer, not the UI or live API calls.**
+  `npm test` checks the Zod schema, the parse-and-validate path, and provider
+  error classification against fixtures — real generations were verified by
+  hand against the live Gemini/OpenRouter APIs in a running browser instead
+  (see `PROGRESS.md` for what was specifically tested and which bugs that
+  testing caught). There's no React component testing or E2E suite.
 - **OpenRouter's free model is a fallback of convenience, not curated.**
   `nvidia/nemotron-3-super-120b-a12b:free` was picked after checking a
   handful of free OpenRouter models for schema adherence; free-tier model
