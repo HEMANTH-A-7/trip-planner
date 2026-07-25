@@ -164,7 +164,7 @@ before sending the itinerary to the API as refinement context.
     built mobile-first (Tailwind base classes, no fixed widths, `h-9 w-9` touch
     targets) but hasn't been visually confirmed at e.g. 375px. **Needs a real
     check** (phone, or Chrome DevTools device toolbar) before calling this done.
-17. [ ] Finalize README (setup, usage, AI-usage note, limitations, time spent)
+17. [x] Finalize README (setup, usage, AI-usage note, limitations, time spent)
 18. [ ] `gh repo create` (public) + push — **confirm with user first**
 
 Update the checkboxes above as steps complete. If you're picking this project
