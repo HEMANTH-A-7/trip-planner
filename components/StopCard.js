@@ -22,7 +22,7 @@ export default function StopCard({
           onClick={() => hasDetails && setExpanded((v) => !v)}
           aria-expanded={expanded}
           disabled={!hasDetails}
-          className="flex flex-1 items-start gap-2 text-left disabled:cursor-default"
+          className="flex flex-1 items-start gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-default dark:focus-visible:ring-zinc-600"
         >
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -61,7 +61,7 @@ export default function StopCard({
             onClick={onMoveUp}
             disabled={isFirst}
             aria-label={`Move "${stop.name}" earlier`}
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200 dark:focus-visible:ring-zinc-600"
           >
             ▲
           </button>
@@ -70,7 +70,7 @@ export default function StopCard({
             onClick={onMoveDown}
             disabled={isLast}
             aria-label={`Move "${stop.name}" later`}
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200 dark:focus-visible:ring-zinc-600"
           >
             ▼
           </button>
@@ -80,7 +80,7 @@ export default function StopCard({
           type="button"
           onClick={onRemove}
           aria-label={`Remove "${stop.name}"`}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:focus-visible:ring-red-700"
         >
           ✕
         </button>

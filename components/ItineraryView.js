@@ -8,7 +8,7 @@ export default function ItineraryView({
   onToggleChecklistItem,
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="animate-fade-in flex flex-col gap-4">
       <div>
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           {itinerary.destination}
