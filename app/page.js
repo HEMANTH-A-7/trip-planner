@@ -8,6 +8,7 @@ import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import ItineraryView from "@/components/ItineraryView";
 import UndoToast from "@/components/UndoToast";
+import ExamplePrompts from "@/components/ExamplePrompts";
 import { loadSession, saveSession } from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
 import { parseSSE } from "@/lib/sse";
@@ -327,6 +328,11 @@ export default function Home() {
           onSubmit={handleCreate}
           disabled={status === STATUS.LOADING}
         />
+
+        {/* Only before the first successful generation - once there's a
+            real itinerary on screen, example chips would just be clutter
+            next to the refine box. */}
+        {!itinerary && <ExamplePrompts onSelect={setPromptText} />}
 
         {status === STATUS.LOADING &&
           (streamingText !== null ? (
