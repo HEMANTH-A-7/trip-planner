@@ -1,5 +1,7 @@
 "use client";
 
+import ExamplePrompts from "./ExamplePrompts";
+
 const MAX_LENGTH = 2000;
 
 // Controlled (value/onChange come from the parent) so the same component can
@@ -15,6 +17,10 @@ export default function TripForm({
   disabled,
   submitLabel = "Plan my trip",
   pendingLabel = "Planning…",
+  // Only passed for the initial "create" use of this form - suggestion
+  // chips inside a refine box wouldn't make sense once a real itinerary
+  // already exists.
+  suggestionsOnSelect,
 }) {
   function handleSubmit(e) {
     e.preventDefault();
@@ -31,33 +37,46 @@ export default function TripForm({
     }
   }
 
+  // Hides once the user has typed their own query, like a search bar's
+  // suggestion dropdown - they're a starting point, not a permanent fixture.
+  const showSuggestions = Boolean(suggestionsOnSelect) && !value.trim();
+
   return (
     <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3">
-      <label htmlFor={id} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <label htmlFor={id} className="text-sm font-medium text-ink-muted">
         {label}
       </label>
-      <textarea
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        maxLength={MAX_LENGTH}
-        rows={3}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full resize-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 shadow-sm outline-none transition focus-visible:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus-visible:border-zinc-500 dark:focus-visible:ring-zinc-700"
-      />
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {value.length}/{MAX_LENGTH}
-        </span>
-        <button
-          type="submit"
-          disabled={disabled || !value.trim()}
-          className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:ring-offset-black"
-        >
-          {disabled ? pendingLabel : submitLabel}
-        </button>
+      <div className={`gradient-border ${disabled ? "opacity-60" : ""}`}>
+        <div className="rounded-[19px] bg-surface">
+          <textarea
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            maxLength={MAX_LENGTH}
+            rows={3}
+            placeholder={placeholder}
+            disabled={disabled}
+            className="w-full resize-none rounded-[19px] bg-transparent px-5 py-4 text-base text-ink outline-none placeholder:text-ink-subtle disabled:cursor-not-allowed"
+          />
+          {showSuggestions && (
+            <div className="border-t border-hairline px-5 py-3">
+              <ExamplePrompts onSelect={suggestionsOnSelect} />
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3 px-5 pb-4">
+            <span className="text-xs text-ink-subtle">
+              {value.length}/{MAX_LENGTH}
+            </span>
+            <button
+              type="submit"
+              disabled={disabled || !value.trim()}
+              className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-canvas transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {disabled ? pendingLabel : submitLabel}
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   );

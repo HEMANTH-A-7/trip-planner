@@ -8,8 +8,7 @@ import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import ItineraryView from "@/components/ItineraryView";
 import UndoToast from "@/components/UndoToast";
-import ExamplePrompts from "@/components/ExamplePrompts";
-import { loadSession, saveSession } from "@/lib/storage";
+import { clearSession, loadSession, saveSession } from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
 import { parseSSE } from "@/lib/sse";
 
@@ -309,30 +308,72 @@ export default function Home() {
     setItinerary((prev) => toggleChecklistItem(prev, dayId, itemId));
   }
 
+  // Escape hatch now that create and refine share one box: once an
+  // itinerary exists there's no other way to start a fresh trip. Bumping
+  // requestIdRef marks any in-flight request stale, same mechanism the
+  // race-guard above already relies on, so a slow response can't repopulate
+  // state after the reset.
+  function handleStartOver() {
+    abortControllerRef.current?.abort();
+    requestIdRef.current += 1;
+    clearSession();
+    setItinerary(null);
+    setStatus(STATUS.IDLE);
+    setError(null);
+    setStreamingText(null);
+    setPromptText("");
+    setRefinePromptText("");
+    lastPromptRef.current = "";
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-black sm:px-6">
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <header>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            Trip Planner
+    <div className="relative min-h-screen overflow-hidden bg-canvas px-4 py-10 sm:px-6 sm:py-16">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-[-160px] -z-10 flex justify-center"
+      >
+        <div className="h-[420px] w-[640px] rounded-full bg-[radial-gradient(closest-side,var(--accent-lavender),transparent_70%)] opacity-20 blur-3xl" />
+        <div className="absolute left-1/3 top-24 h-[280px] w-[380px] rounded-full bg-[radial-gradient(closest-side,var(--accent-peach),transparent_70%)] opacity-20 blur-3xl" />
+      </div>
+
+      <main className="relative mx-auto flex w-full max-w-2xl flex-col gap-6">
+        <header className="animate-fade-up">
+          <h1 className="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+            <span className="text-gradient">Trip</span> Planner
           </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-ink-muted sm:text-base">
             Describe a trip in plain language and get an editable, day-by-day
             itinerary.
           </p>
         </header>
 
+        {/* One box, not two: before an itinerary exists it creates one,
+            after it exists the same box refines it in place. */}
+        {itinerary && (
+          <button
+            type="button"
+            onClick={handleStartOver}
+            className="self-end text-xs text-ink-subtle underline underline-offset-2 hover:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+          >
+            Start a new trip
+          </button>
+        )}
         <TripForm
-          value={promptText}
-          onChange={setPromptText}
-          onSubmit={handleCreate}
+          id={itinerary ? "refine-prompt" : "trip-prompt"}
+          label={itinerary ? "Refine this itinerary" : "Describe your trip"}
+          placeholder={
+            itinerary
+              ? "e.g. swap day 2's museum for something outdoors"
+              : undefined
+          }
+          submitLabel={itinerary ? "Apply change" : "Plan my trip"}
+          pendingLabel={itinerary ? "Applying…" : "Planning…"}
+          value={itinerary ? refinePromptText : promptText}
+          onChange={itinerary ? setRefinePromptText : setPromptText}
+          onSubmit={itinerary ? handleRefine : handleCreate}
           disabled={status === STATUS.LOADING}
+          suggestionsOnSelect={itinerary ? undefined : setPromptText}
         />
-
-        {/* Only before the first successful generation - once there's a
-            real itinerary on screen, example chips would just be clutter
-            next to the refine box. */}
-        {!itinerary && <ExamplePrompts onSelect={setPromptText} />}
 
         {status === STATUS.LOADING &&
           (streamingText !== null ? (
@@ -352,25 +393,12 @@ export default function Home() {
             request is in flight so it's unambiguous which itinerary (old or
             incoming) is on screen. */}
         {itinerary && status !== STATUS.LOADING && (
-          <>
-            <TripForm
-              id="refine-prompt"
-              label="Refine this itinerary"
-              placeholder="e.g. swap day 2's museum for something outdoors"
-              submitLabel="Apply change"
-              pendingLabel="Applying…"
-              value={refinePromptText}
-              onChange={setRefinePromptText}
-              onSubmit={handleRefine}
-              disabled={status === STATUS.LOADING}
-            />
-            <ItineraryView
-              itinerary={itinerary}
-              onRemoveStop={handleRemoveStop}
-              onMoveStop={handleMoveStop}
-              onToggleChecklistItem={handleToggleChecklistItem}
-            />
-          </>
+          <ItineraryView
+            itinerary={itinerary}
+            onRemoveStop={handleRemoveStop}
+            onMoveStop={handleMoveStop}
+            onToggleChecklistItem={handleToggleChecklistItem}
+          />
         )}
       </main>
       {pendingUndo && (
