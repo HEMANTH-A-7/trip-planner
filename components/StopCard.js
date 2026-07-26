@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CATEGORY_LABELS } from "@/lib/categories";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/categories";
 
 export default function StopCard({
   stop,
@@ -15,76 +16,76 @@ export default function StopCard({
   const hasDetails = Boolean(stop.description);
 
   return (
-    <li className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-start gap-2 p-3">
+    <li className="rounded-2xl border border-hairline bg-surface-2">
+      <div className="flex items-center gap-2 p-3">
         <button
           type="button"
           onClick={() => hasDetails && setExpanded((v) => !v)}
           aria-expanded={expanded}
           disabled={!hasDetails}
-          className="flex flex-1 items-start gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-default dark:focus-visible:ring-zinc-600"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender disabled:cursor-default"
         >
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               {stop.time && (
-                <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
-                  {stop.time}
-                </span>
+                <span className="text-xs font-medium text-ink-subtle">{stop.time}</span>
               )}
               {stop.category && (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: CATEGORY_COLORS[stop.category] }}
+                  />
                   {CATEGORY_LABELS[stop.category] ?? stop.category}
                 </span>
               )}
             </div>
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">{stop.name}</p>
-            {hasDetails && expanded && (
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                {stop.description}
-              </p>
-            )}
+            <p className="font-medium text-ink">{stop.name}</p>
           </div>
           {hasDetails && (
-            <span
+            <ChevronDown
               aria-hidden
-              className="mt-1 shrink-0 text-zinc-400 transition-transform dark:text-zinc-500"
+              size={16}
+              className="shrink-0 text-ink-subtle transition-transform"
               style={{ transform: expanded ? "rotate(180deg)" : "none" }}
-            >
-              ▾
-            </span>
+            />
           )}
         </button>
 
-        <div className="flex shrink-0 flex-col items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={onMoveUp}
             disabled={isFirst}
             aria-label={`Move "${stop.name}" earlier`}
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200 dark:focus-visible:ring-zinc-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender disabled:opacity-30 disabled:hover:bg-transparent"
           >
-            ▲
+            <ChevronUp size={16} aria-hidden />
           </button>
           <button
             type="button"
             onClick={onMoveDown}
             disabled={isLast}
             aria-label={`Move "${stop.name}" later`}
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800 dark:hover:text-zinc-200 dark:focus-visible:ring-zinc-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender disabled:opacity-30 disabled:hover:bg-transparent"
           >
-            ▼
+            <ChevronDown size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove "${stop.name}"`}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtle hover:bg-danger-bg hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+          >
+            <X size={16} aria-hidden />
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remove "${stop.name}"`}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:focus-visible:ring-red-700"
-        >
-          ✕
-        </button>
       </div>
+
+      {hasDetails && expanded && (
+        <p className="px-3 pb-3 text-sm text-ink-muted">{stop.description}</p>
+      )}
     </li>
   );
 }

@@ -24,33 +24,27 @@ export default function TripOverviewChart({ itinerary }) {
   const max = Math.max(...rows.map((r) => r.count));
 
   return (
-    <figure className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <figcaption className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <figure className="rounded-2xl border border-hairline bg-surface p-4">
+      <figcaption className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-subtle">
         Stops by category
       </figcaption>
       <ul className="flex flex-col gap-2">
         {rows.map(({ category, count }) => (
           <li
             key={category}
-            className="grid grid-cols-[6rem_1fr_1.5rem] items-center gap-2 text-sm"
+            className="grid grid-cols-[8.5rem_1fr_1.5rem] items-center gap-2 text-sm"
             aria-label={`${CATEGORY_LABELS[category] ?? category}: ${count}`}
           >
-            <span className="truncate text-zinc-600 dark:text-zinc-300">
+            <span className="truncate text-ink-muted">
               {CATEGORY_LABELS[category] ?? category}
             </span>
-            <span
-              aria-hidden
-              className="h-5 rounded-r bg-zinc-100 dark:bg-zinc-800"
-            >
+            <span aria-hidden className="h-5 rounded-full bg-surface-2">
               <span
-                className="block h-full rounded-r bg-[#2a78d6] dark:bg-[#3987e5]"
+                className="block h-full rounded-full bg-accent-lavender"
                 style={{ width: `${(count / max) * 100}%` }}
               />
             </span>
-            <span
-              aria-hidden
-              className="text-right text-zinc-500 tabular-nums dark:text-zinc-400"
-            >
+            <span aria-hidden className="text-right text-ink-muted tabular-nums">
               {count}
             </span>
           </li>

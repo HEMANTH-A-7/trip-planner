@@ -8,15 +8,13 @@ export default function ItineraryView({
   onToggleChecklistItem,
 }) {
   return (
-    <div className="animate-fade-in flex flex-col gap-4">
+    <div className="animate-fade-in flex flex-col gap-5">
       <div>
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-2xl font-semibold tracking-tight text-ink">
           {itinerary.destination}
         </h2>
         {itinerary.summary && (
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {itinerary.summary}
-          </p>
+          <p className="mt-1 text-sm text-ink-muted">{itinerary.summary}</p>
         )}
       </div>
       <TripOverviewChart itinerary={itinerary} />

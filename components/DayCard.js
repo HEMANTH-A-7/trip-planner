@@ -3,15 +3,13 @@ import ChecklistBlock from "./ChecklistBlock";
 
 export default function DayCard({ day, onRemoveStop, onMoveStop, onToggleChecklistItem }) {
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <section className="rounded-3xl border border-hairline bg-surface p-5">
+      <h3 className="mb-4 text-xs font-semibold uppercase tracking-widest text-ink-subtle">
         Day {day.day}
         {day.title ? ` — ${day.title}` : ""}
       </h3>
       {day.stops.length === 0 ? (
-        <p className="text-sm text-zinc-400 dark:text-zinc-500">
-          No stops left for this day.
-        </p>
+        <p className="text-sm text-ink-subtle">No stops left for this day.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {day.stops.map((stop, index) => (

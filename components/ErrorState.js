@@ -2,12 +2,12 @@ export default function ErrorState({ message, onRetry }) {
   return (
     <div
       role="alert"
-      className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 py-10 text-center dark:border-red-900/50 dark:bg-red-950/30"
+      className="flex flex-col items-center gap-3 rounded-2xl border border-danger/30 bg-danger-bg py-10 text-center"
     >
-      <p className="max-w-sm text-sm text-red-700 dark:text-red-300">{message}</p>
+      <p className="max-w-sm text-sm text-danger">{message}</p>
       <button
         onClick={onRetry}
-        className="rounded-full border border-red-300 bg-white px-4 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-100 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/50"
+        className="rounded-full border border-danger/40 bg-surface px-4 py-1.5 text-sm font-medium text-danger transition hover:bg-danger-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
       >
         Try again
       </button>
