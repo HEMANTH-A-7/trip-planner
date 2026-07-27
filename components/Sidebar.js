@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarDays, Compass, FileText, History, Plus, X } from "lucide-react";
+import EdgeScroller from "./EdgeScroller";
 
 const NAV_ITEMS = [
   { id: "itinerary", label: "Itinerary", icon: CalendarDays },
@@ -148,8 +149,11 @@ export default function Sidebar({
             Days
           </p>
           {itinerary ? (
-            /* Horizontal scroller on narrow screens, stacked list on the rail. */
-            <ul className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:pb-0">
+            /* Horizontal scroller on narrow screens, stacked list on the rail.
+               EdgeScroller adds the faded chevron that tells a phone user the
+               row keeps going; it takes itself off at `lg`, where the list
+               stacks and there's no overflow left to point at. */
+            <EdgeScroller className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:pb-0">
               {itinerary.days.map((day) => {
                 const active = day.id === selectedDayId && view === "itinerary";
                 return (
@@ -176,7 +180,7 @@ export default function Sidebar({
                   </li>
                 );
               })}
-            </ul>
+            </EdgeScroller>
           ) : (
             <p className="px-3 py-2 text-xs text-ink-subtle">
               Plan a trip to see its days here.
