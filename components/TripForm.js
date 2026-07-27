@@ -44,11 +44,24 @@ export default function TripForm({
   }
 
   function handleKeyDown(e) {
-    // Cmd/Ctrl+Enter submits without leaving the textarea - plain Enter
-    // stays a newline since trip descriptions are often multi-line.
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      handleSubmit(e);
-    }
+    if (e.key !== "Enter") return;
+
+    // Enter submits, Shift+Enter starts a new line - the convention every
+    // chat-style input uses, and the one people try first. It used to be the
+    // other way round (plain Enter inserted a newline, only Cmd/Ctrl+Enter
+    // submitted), which meant typing a trip and pressing Enter appeared to do
+    // nothing at all. Multi-line descriptions are the rarer case and still
+    // have Shift+Enter.
+    //
+    // On a phone this is what makes the keyboard's own return key work, since
+    // there's no Cmd or Ctrl to hold. Note this fires for the composition
+    // Enter too on some IMEs, so mid-composition keypresses are ignored below.
+    if (e.shiftKey) return;
+    // isComposing is true while an IME candidate window is open (Japanese,
+    // Chinese, Korean); Enter there is "accept this candidate", not "send".
+    if (e.nativeEvent?.isComposing) return;
+
+    handleSubmit(e);
   }
 
   return (
