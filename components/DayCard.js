@@ -6,9 +6,11 @@ import ChecklistBlock from "./ChecklistBlock";
 
 export default function DayCard({
   day,
+  defaultCurrency,
   onRemoveStop,
   onMoveStop,
-  onRenameStop,
+  onUpdateStop,
+  onRequestSuggestion,
   onReorderStop,
   onToggleChecklistItem,
 }) {
@@ -61,8 +63,15 @@ export default function DayCard({
               isDropTarget={
                 dragIndex !== null && overIndex === index && dragIndex !== index
               }
+              defaultCurrency={defaultCurrency}
               onRemove={() => onRemoveStop(day.id, stop.id)}
-              onRename={(name) => onRenameStop(day.id, stop.id, name)}
+              onUpdate={(patch) => onUpdateStop(day.id, stop.id, patch)}
+              // Bound to the index rather than the id: the server addresses
+              // the slot being replaced by position, since that's what tells
+              // it which stops sit either side of the gap it has to fill.
+              onRequestSuggestion={(instruction) =>
+                onRequestSuggestion(day.id, index, instruction)
+              }
               onMoveUp={() => onMoveStop(day.id, stop.id, -1)}
               onMoveDown={() => onMoveStop(day.id, stop.id, 1)}
               onDragStart={() => setDragIndex(index)}

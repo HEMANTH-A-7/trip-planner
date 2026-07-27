@@ -92,7 +92,12 @@ function reorderStop(itinerary, dayId, fromIndex, toIndex) {
   });
 }
 
-function renameStop(itinerary, dayId, stopId, name) {
+// Content edit, not a structural one, so it deliberately doesn't go through
+// mapDay: `patch` may legitimately include a new `time`, and re-pinning the
+// slot afterwards would immediately throw that away. Fields set to undefined
+// are deleted rather than stored, so clearing the cost field in the editor
+// removes the chip instead of leaving `{ amount: undefined }` behind.
+function updateStop(itinerary, dayId, stopId, patch) {
   return {
     ...itinerary,
     days: itinerary.days.map((day) =>
@@ -100,9 +105,14 @@ function renameStop(itinerary, dayId, stopId, name) {
         ? day
         : {
             ...day,
-            stops: day.stops.map((stop) =>
-              stop.id === stopId ? { ...stop, name } : stop
-            ),
+            stops: day.stops.map((stop) => {
+              if (stop.id !== stopId) return stop;
+              const next = { ...stop, ...patch };
+              for (const key of Object.keys(patch)) {
+                if (patch[key] === undefined) delete next[key];
+              }
+              return next;
+            }),
           }
     ),
   };
@@ -393,8 +403,59 @@ export default function Home() {
     setItinerary((prev) => reorderStop(prev, dayId, fromIndex, toIndex));
   }
 
-  function handleRenameStop(dayId, stopId, name) {
-    setItinerary((prev) => renameStop(prev, dayId, stopId, name));
+  function handleUpdateStop(dayId, stopId, patch) {
+    setItinerary((prev) => updateStop(prev, dayId, stopId, patch));
+  }
+
+  // Asks the model for one replacement stop and hands it straight back to the
+  // card, which previews it and only writes to the itinerary if the traveler
+  // accepts. Deliberately outside the requestId/abortController machinery the
+  // create and refine flows share: this is a scoped edit that shouldn't
+  // cancel - or be cancelled by - a whole-itinerary request, and it never
+  // touches global status, so the rest of the trip stays interactive while
+  // one card is thinking. Resolves to a result object rather than throwing,
+  // so the card can render the failure inline next to the field.
+  async function handleRequestSuggestion(dayId, stopIndex, instruction) {
+    const dayIndex = itinerary.days.findIndex((day) => day.id === dayId);
+    if (dayIndex === -1) {
+      return { ok: false, message: "That day is no longer part of this trip." };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/plan-trip/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction,
+          itinerary: stripIds(itinerary),
+          dayIndex,
+          stopIndex,
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.stop) {
+        return {
+          ok: false,
+          message: data?.message ?? "Couldn't get a suggestion. Please try again.",
+        };
+      }
+      return { ok: true, stop: data.stop };
+    } catch (err) {
+      return {
+        ok: false,
+        message:
+          err.name === "AbortError"
+            ? "That took too long. Please try again."
+            : "Network error — check your connection and try again.",
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   function handleSelectDay(dayId) {
@@ -462,6 +523,17 @@ export default function Home() {
     itinerary?.days[0] ??
     null;
 
+  // Pre-fills the cost field when editing a stop that has no cost yet, so a
+  // manually added price lands in the trip's own currency and stays part of
+  // the budget rollup instead of being skipped as a second currency.
+  const tripCurrency =
+    itinerary?.budgetBaseline?.currency ??
+    itinerary?.estimatedBudget?.currency ??
+    itinerary?.days
+      .flatMap((day) => day.stops)
+      .find((stop) => stop.estimatedCost?.currency)?.estimatedCost.currency ??
+    "";
+
   // The landing is a full-bleed photo with no sidebar - nothing framing it,
   // just the headline and the search bar at the bottom of the viewport. The
   // sidebar only appears once there's a trip for it to navigate.
@@ -518,52 +590,54 @@ export default function Home() {
       />
 
       <main className="min-w-0 flex-1">
-          <TripHero itinerary={itinerary} dayCount={itinerary.days.length} />
+        <TripHero itinerary={itinerary} dayCount={itinerary.days.length} />
 
-          <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8 xl:max-w-4xl">
-            {view === VIEW.SUMMARY ? (
-              <SummaryView itinerary={itinerary} onSelectDay={handleSelectDay} />
-            ) : (
-              <div className="flex flex-col gap-6">
-                {/* A failed refinement only means the *attempted* edit didn't
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8 xl:max-w-4xl">
+          {view === VIEW.SUMMARY ? (
+            <SummaryView itinerary={itinerary} onSelectDay={handleSelectDay} />
+          ) : (
+            <div className="flex flex-col gap-6">
+              {/* A failed refinement only means the *attempted* edit didn't
                     apply - the existing day is still valid and shouldn't
                     disappear behind its own error message. It's hidden only
                     while a request is in flight, so it's never ambiguous
                     which itinerary (old or incoming) is on screen. */}
-                {status === STATUS.LOADING ? (
-                  <LoadingState />
-                ) : (
-                  selectedDay && (
-                    <DayCard
-                      key={selectedDay.id}
-                      day={selectedDay}
-                      onRemoveStop={handleRemoveStop}
-                      onMoveStop={handleMoveStop}
-                      onRenameStop={handleRenameStop}
-                      onReorderStop={handleReorderStop}
-                      onToggleChecklistItem={handleToggleChecklistItem}
-                    />
-                  )
-                )}
+              {status === STATUS.LOADING ? (
+                <LoadingState />
+              ) : (
+                selectedDay && (
+                  <DayCard
+                    key={selectedDay.id}
+                    day={selectedDay}
+                    defaultCurrency={tripCurrency}
+                    onRemoveStop={handleRemoveStop}
+                    onMoveStop={handleMoveStop}
+                    onUpdateStop={handleUpdateStop}
+                    onRequestSuggestion={handleRequestSuggestion}
+                    onReorderStop={handleReorderStop}
+                    onToggleChecklistItem={handleToggleChecklistItem}
+                  />
+                )
+              )}
 
-                {status === STATUS.ERROR && (
-                  <ErrorState message={error?.message} onRetry={handleRetry} />
-                )}
+              {status === STATUS.ERROR && (
+                <ErrorState message={error?.message} onRetry={handleRetry} />
+              )}
 
-                <TripForm
-                  id="refine-prompt"
-                  label="Refine this itinerary"
-                  placeholder="e.g. swap day 2's museum for something outdoors"
-                  submitLabel="Apply change"
-                  pendingLabel="Applying…"
-                  value={refinePromptText}
-                  onChange={setRefinePromptText}
-                  onSubmit={handleRefine}
-                  disabled={status === STATUS.LOADING}
-                />
-              </div>
-            )}
-          </div>
+              <TripForm
+                id="refine-prompt"
+                label="Refine this itinerary"
+                placeholder="e.g. swap day 2's museum for something outdoors"
+                submitLabel="Apply change"
+                pendingLabel="Applying…"
+                value={refinePromptText}
+                onChange={setRefinePromptText}
+                onSubmit={handleRefine}
+                disabled={status === STATUS.LOADING}
+              />
+            </div>
+          )}
+        </div>
       </main>
 
       {pendingUndo && (
