@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Clock, GripVertical, Pencil, Trash2, Wallet } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  GripVertical,
+  Pencil,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/categories";
 import { formatDuration, formatStopCost } from "@/lib/tripStats";
 import StopEditor from "./StopEditor";
@@ -156,7 +164,33 @@ export default function StopCard({
                 >
                   <Trash2 size={14} aria-hidden />
                 </button>
-                <span className="group/grip relative">
+                {/* Touch gets its own move controls. The grip beside them
+                    reorders via HTML5 drag-and-drop, which has no touch
+                    equivalent at all - dragstart never fires from a finger -
+                    so on a phone the grip was a button that did nothing, and
+                    its arrow-key fallback needs a keyboard that isn't there.
+                    Two explicit buttons are unglamorous next to a drag, but
+                    they're the only version of this that works one-thumbed. */}
+                <button
+                  type="button"
+                  onClick={onMoveUp}
+                  disabled={isFirst}
+                  aria-label={`Move "${stop.name}" earlier`}
+                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender sm:hidden"
+                >
+                  <ChevronUp size={16} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={onMoveDown}
+                  disabled={isLast}
+                  aria-label={`Move "${stop.name}" later`}
+                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender sm:hidden"
+                >
+                  <ChevronDown size={16} aria-hidden />
+                </button>
+
+                <span className="group/grip relative hidden sm:block">
                   <button
                     type="button"
                     onMouseDown={() => setDragArmed(true)}
