@@ -24,7 +24,7 @@ Full assignment text is preserved in `ASSIGNMENT.md` in this repo.
 | Framework | Next.js (App Router), JavaScript, no TypeScript | Bundles frontend + API routes as backend in one app; TS is optional/not graded per assignment FAQ |
 | Styling | Tailwind CSS v4 | Fast to build responsive/dark-mode UI; `dark:` variant is `prefers-color-scheme`-driven by default |
 | Validation | Zod v4 | Runtime schema validation of whatever the model returns, independent of any provider's own JSON mode. `z.toJSONSchema()` derives the schema handed to Gemini, so there's one source of truth |
-| Reordering | Up/down buttons, not drag-and-drop | More reliable on mobile/touch than DnD libraries; assignment only requires "reorder", not drag |
+| Reordering | Pointer-based drag-and-drop, hand-written | HTML5 DnD never fires from a finger; one pointer-event path covers mouse, touch and pen. Up/down buttons stay on touch as the screen-reader-accessible fallback |
 | Streaming | Implemented, "create" flow only, no fallback of its own | See `app/api/plan-trip/stream/route.js` — streaming failures fall back to the plain endpoint client-side instead of retrying providers mid-stream |
 | Git identity | `user.name = "Hemanth Amarthi"`, `user.email = hemanthkumar.amarthi7@gmail.com` (set locally in this repo, not global) | Matches how commits would appear if made manually via GitHub/git CLI |
 | Commit authorship | Every commit is authored solely by the user. **Claude is never added as a co-author or contributor.** | Explicit user instruction |
@@ -58,30 +58,38 @@ trip-planner/
     api/
       plan-trip/
         route.js               # POST: prompt -> Gemini (-> OpenRouter fallback) -> validated JSON
-        stream/route.js         # POST: streams the "create" flow as SSE, no fallback of its own
-    page.js                    # Main page: all client state (itinerary, status, streaming) lives here
+        stream/route.js        # POST: streams the "create" flow as SSE, no fallback of its own
+        stop/route.js          # POST: regenerate a single stop in place
+      hero-image/route.js      # GET: destination -> Pexels photo, cached 30 days
+    page.js                    # Main page: all client state (itinerary, status, streaming, undo)
     layout.js
-    globals.css
+    globals.css                # Design tokens + shared component classes
   components/
-    TripForm.js                 # controlled free-text input; reused for both the main and refine prompts
-    ItineraryView.js             # renders destination header + TripOverviewChart + days
-    DayCard.js                   # one day: stops + checklist block
-    StopCard.js                   # one stop: expand/remove/reorder
-    ChecklistBlock.js              # interactive packing-list checkboxes (block type #2)
-    TripOverviewChart.js            # single-hue bar chart, stops-by-category (block type #3)
-    StreamingPreview.js              # live raw-text preview shown while the create stream is in flight
-    LoadingState.js / ErrorState.js / EmptyState.js
+    TripForm.js                # controlled free-text input; reused for create and refine
+    DayCard.js                 # one day: stops + checklist, owns the drag session
+    StopCard.js                # one stop: expand/edit/remove/drag
+    StopEditor.js              # inline edit form, incl. AI-suggest for a single stop
+    ChecklistBlock.js          # interactive packing-list checkboxes (block type #2)
+    TripOverviewChart.js       # single-hue bar chart, stops-by-category (block type #3)
+    HeroBackdrop.js            # crossfading hero images, shared by landing and trip
+    Sidebar.js  TripHero.js  SummaryView.js  TripSummary.js
+    LandingHero.js  RecentTrips.js  UndoToast.js  EdgeScroller.js
+    LoadingState.js / ErrorState.js
   lib/
-    schema.js                   # zod schema, Gemini JSON schema, normalize/stripIds, parseAndValidateItinerary
-    gemini.js                   # Gemini SDK calls: callGemini (plain) + streamGeminiCreate (streaming)
-    openrouter.js                # OpenRouter fallback provider (plain fetch, OpenAI-compatible API)
-    providerErrors.js             # ProviderError + classifyGeminiError, shared by both routes
-    categories.js                 # shared CATEGORY_LABELS (StopCard badges + chart)
-    storage.js                    # localStorage save/reload session
-    sse.js                        # minimal SSE frame parser for the streaming client
+    schema.js                  # zod schema, Gemini JSON schema, normalize/stripIds, parse+validate
+    gemini.js                  # Gemini SDK: callGemini (plain) + streamGeminiCreate (streaming)
+    openrouter.js              # OpenRouter fallback provider (OpenAI-compatible API)
+    providerErrors.js          # ProviderError + classifyGeminiError, shared by both routes
+    schedule.js                # rebuilds a day's times from stop durations on reorder
+    useDragSort.js             # pointer-based drag reordering (mouse + touch + keyboard)
+    categories.js              # shared category labels + lucide icons
+    tripStats.js               # cost/duration formatting, rollups, main-stop selection
+    storage.js                 # localStorage session + trip history
+    heroImages.js              # bundled hero set, themes, credits
+    sse.js                     # minimal SSE frame parser for the streaming client
   .env.local.example
-  PROGRESS.md                   # <- this file
-  ASSIGNMENT.md                 # original assignment text, verbatim
+  PROGRESS.md                  # <- this file
+  ASSIGNMENT.md                # original assignment text, verbatim
   README.md
 ```
 
@@ -122,7 +130,10 @@ before sending the itinerary to the API as refinement context.
 - **Wrong shape** → `ItinerarySchema.safeParse` after parsing. On failure: a
   distinct `bad_shape` error, shown with Retry; raw validation issues logged
   server-side.
-- **Empty** → `days` has `.min(1)`, so an empty/missing days array fails
+- **Empty** → handled in place rather than by a dedicated component: no trip
+  is the landing page, an emptied day says so on the day card, and an empty
+  history hides its section. At the data layer, `days` has `.min(1)`, so an
+  empty/missing days array fails
   schema validation and surfaces as the same `bad_shape` error rather than a
   blank successful render.
 - **Slow** → client-side timeout (35s, slightly above the server's own 30s)
@@ -370,6 +381,226 @@ the sidebar between strip and sticky rail with no reload, and there's no
 horizontal overflow at 375 / 420 / 606 / 1100 / 1500 / 1600px. Note Chrome on
 macOS won't size a window below ~600px wide, so true phone widths still need
 the iframe trick.
+
+### Drag-and-drop that works on a phone (fifth round)
+
+Reordering a day used to be two separate mechanisms: HTML5 drag-and-drop from
+the grip on desktop, and a pair of up/down chevrons on touch, because
+**`dragstart` never fires from a finger** — the grip was a dead control on a
+phone. Both are now driven by one pointer-event implementation in
+`lib/useDragSort.js`, so a mouse, a finger and a stylus take the same path.
+
+- **Touch lifts on a hold** (280ms) anywhere on the card; a mouse lifts
+  immediately from the grip, since it has a handle to aim at and holding the
+  body would fight text selection. Any movement over 8px before the hold
+  completes hands the gesture back to the browser as a scroll — that's the
+  whole difference between "drag" and "scroll" on a touchscreen.
+- **The page can't be allowed to scroll under an active drag, and React's own
+  touch listeners are passive**, so `preventDefault` has to come from a native
+  non-passive `touchmove` listener registered at lift. `contextmenu` is
+  suppressed with it: Android fires one at the end of a long press, on top of
+  the drag that press just started.
+- **Positions are measured in document coordinates**, not viewport ones, so the
+  page can scroll during a drag. It does: the pointer inside 76px of a viewport
+  edge scrolls the page each frame, which is what lets a card reach a slot that
+  wasn't on screen when it was picked up — the normal case on a phone, where a
+  day rarely fits in one viewport.
+- **The drop slot is judged against where the cards started**, not where they
+  currently sit. Comparing against shifted positions makes a card resting near
+  a boundary flip back and forth, because it displaces the very card it's being
+  compared to. Cards being passed move by exactly the space the lifted card
+  vacated (its height plus the row gap), whatever height they are themselves.
+- **Dropping clears the transition in the same commit as the transforms**, so
+  they unwind instantly against the reordered list instead of animating back
+  out of it.
+- **Which controls a card shows now follows `pointer: fine` / `pointer: coarse`
+  rather than the `sm:` width breakpoint.** A narrow desktop window is still a
+  mouse (it used to lose the grip *and* have no working drag at all), and a
+  wide tablet is still a thumb. The chevrons stay on touch on purpose: a drag
+  is a gesture you have to know about and be able to perform, and they're the
+  only reorder control available through a screen reader.
+- Geometry is pure and unit-tested (`lib/useDragSort.test.js`, 13 tests) —
+  slot selection with ragged card heights, displacement, and the edge-scroll
+  ramp. The gesture itself was verified live in the browser: real mouse drags
+  from the grip, and synthesised `pointerType: "touch"` sequences for the
+  hold-lift-move-drop path.
+
+### Second design pass, against the reference's real values (sixth round)
+
+User's read on the first redesign: "generic, too AI generated, without any
+effort", pointing at flamapp.ai's feature section as the target. Rather than
+guess from the screenshot, the reference's own computed styles were read off
+the live site again. The findings, and what each one changed:
+
+- **The font was never the problem.** The app was already on Golos Text, and
+  so is flamapp — verified both `document.fonts` in the app (loaded, not
+  falling back) and the reference's computed `font-family`. What differs is
+  the *setting*: the reference runs **-3px of tracking on a 36px headline**
+  (-0.083em) at weight 500, -0.6px at 22px/600, and +1.2px on 11px uppercase
+  labels. Default tracking at display sizes is most of what makes type look
+  unset. Hence `.type-display` / `.type-heading` / `.type-label`, and
+  `letter-spacing: -0.02em` on `body`.
+- **Edges.** The reference borders at `#434343` and `#6e6d6d` — real greys.
+  Ours were `rgba(255,255,255,0.08)`, which dissolves into whatever it sits
+  on. This one change did more for "clarity" than anything else.
+- **Panels are gradients**, `linear-gradient(to top, #0f0f0f 14%, #232323
+  119%)`, never flat fills. Plus a **dot matrix** (1px dots on a 20px grid)
+  over them — run at 0.16 here rather than the reference's 0.3, because our
+  panels are mostly covered by the cards on them and the leftover gutters
+  read as a dashed border at full strength.
+- **Nesting.** The reference stacks a 32px shell → an 18px inset → a 20px
+  panel. A day is now shell / gradient panel / raised stop cards, three tiers
+  instead of one flat box.
+- **Colour.** Four unrelated pastels (peach/lavender/mint/gold, cycled
+  per category) were replaced by one warm ramp, `#f4d1be → #a06040`, which is
+  the reference's own gradient. `CATEGORY_COLORS` is gone entirely: the tint
+  encoded nothing the label didn't already say, and six hues on one card was
+  the loudest tell that nobody picked the colours. Greys are now neutral
+  rather than warm-tinted, so the warmth reads as deliberate where it is used.
+  **The search box keeps its original four-colour sweep** — it was swapped for
+  a single warm one in this pass and the user asked for it back. Those four
+  hues now live as literals inside `.gradient-border` rather than as palette
+  tokens: the effect is unchanged, but they can't spread to anything else.
+- **Selected state** is the reference's solid pill. `.pill-active` is
+  `background: var(--ink); color: var(--canvas)`, so it inverts by itself
+  between themes instead of needing a second rule.
+- **Figures** (times, costs, durations, stat values) are set in the mono face
+  that was already loaded, with tabular digits, and the stat tiles fill their
+  one number with the warm gradient — the reference's treatment for exactly
+  that job.
+
+Verified live at desktop and at 390px, in both themes (the light block was
+force-applied to check the inversion), and the drag from the round above still
+reorders correctly against the new card heights.
+
+One fix that came out of looking at it on a phone: the card's action buttons
+used to sit beside the stop name and took roughly a third of the width, which
+broke "Tokyo National Museum in Ueno Park" over four lines. They now share a
+line with the time, which is short and never competes, and the name gets the
+full width. The timeline rail is also dropped below `sm` — it cost ~22px of a
+390px screen to say something the ordering already says.
+
+### Hero imagery: rotation on the landing, a real photo per trip (seventh round)
+
+The last generic thing in the app was one stock beach behind every
+destination — "Tokyo, Japan" set over a palm tree. Two different fixes,
+because the two surfaces have opposite problems:
+
+- **Landing rotates.** No destination has been named yet, so the images have
+  nothing to contradict, and the rotation *is* the pitch: anywhere you want.
+  Five user-supplied photos on a **2s cadence** (1.3s hold + 700ms crossfade,
+  measured on the running page at 2049–2051ms per change). 2s was asked for
+  twice; the reservation on the record is that at this speed each image only
+  settles for about a second, and the landing's job is to get someone typing
+  into the box underneath. Changing it means moving `CYCLE_MS` in
+  `HeroBackdrop` — `HOLD_MS` derives from it, so the sum stays right.
+
+  The cadence is why the next image is mounted invisibly the moment the
+  current one lands, rather than when its turn comes: at 2s there is no time
+  to *start* fetching once the fade is already due, and the first pass through
+  the set would stretch until everything was cached.
+- **A trip does not rotate.** Its destination is on screen, so every rotation
+  would be a fresh chance to be wrong. It gets one image, chosen to match.
+
+**The ordering is the whole trick.** The model returns a `heroTheme`, that
+bundled image renders immediately, and `/api/hero-image` looks up a real
+photograph of the destination on Pexels which crossfades in over the top. The
+network call is never on the critical path, never blocks paint, and never
+shows a spinner. If it's slow, fails, or the place can't be identified,
+nothing happens and nobody notices.
+
+Four things that were measured rather than assumed, each of which changed the
+implementation:
+
+- **Search the destination alone.** Appending "travel landscape" makes results
+  *worse* — Pexels widens on extra terms rather than narrowing, so
+  "Reykjavik, Iceland" returns Reykjavik while "Reykjavik, Iceland travel
+  landscape" starts returning generic Icelandic plains.
+- **A non-empty response is not a match.** Pexels answers everything:
+  "zzqqxyvv nowhereland" returns 347 photos of Ferris wheels and a "Neverland"
+  sign. So a photo has to *name* the place — its alt text or URL slug must
+  contain a significant word from the destination — or it's discarded and the
+  themed image stays. Generic-but-never-wrong is the safe direction to fail.
+- **`decode()` does not resolve in a background tab.** Verified: an image that
+  is `complete` with a real `naturalWidth` left `decode()` pending
+  indefinitely. It had been the gate for starting the fade, so a landing page
+  opened in a background tab deadlocked its own rotation and was *still* stuck
+  when the tab was finally looked at. It now races a 250ms timer.
+- **next/image does not forward `onLoad`.** The ref fires, the image
+  completes, `onLoad` is never called. Readiness now comes from a native
+  `load` listener on the element, plus an immediate check for an image that
+  was already complete when the ref ran — the normal case on a repeat visit,
+  when the file is in the HTTP cache.
+
+Two implementation notes worth keeping:
+
+- The crossfade is a **CSS animation, not a transition**. A transition has to
+  be kicked off from JS on a later frame, which means `requestAnimationFrame`
+  — and rAF doesn't run in a background tab, so the fade can be stranded
+  half-done. An animation starts itself the moment the element is committed.
+- `HeroBackdrop` tracks **the image being shown, not an index into the list**.
+  The trip hero swaps its whole list when the photo arrives (same length, same
+  index, different picture), so anything index-based cut instead of fading and
+  had no way to keep showing the outgoing image once it left the list.
+
+Caching is what keeps this inside a free tier: the outbound Pexels fetch is
+cached for 30 days by URL, so everyone planning Tokyo shares one upstream
+call. `priority` was also swapped for `preload` throughout — deprecated as of
+Next 16 — and the incoming crossfade layer is `loading="eager"`, since a layer
+about to be faded in is already in the viewport and the default lazy loading
+leaves it waiting on an IntersectionObserver.
+
+Attribution is rendered in the hero corner. The Pexels and Unsplash licences
+don't require it for downloaded images, but the Pexels **API** guidelines do
+for photos served through the API — worth re-reading their current terms
+before submission rather than trusting this note.
+
+### Rhythm, one icon set, and a schedule that actually recomputes (eighth round)
+
+Six things, from a critique of the app as it stood:
+
+- **Times are rebuilt from durations, not re-pinned to slots.** This is the
+  substantive one. `lib/schedule.js` used to keep a day in order by pinning
+  each time to its position, and documented the trade-off as unfixable:
+  recomputing needs travel time between two arbitrary places, which nothing
+  in the app knows. It's fixable, because the model's own spacing already
+  encodes it. A schedule is now read as a start time plus a *gap per slot*,
+  where the gap is the original interval minus that stop's own duration. On
+  reorder, durations travel with the stop and gaps stay with the slot.
+  Verified live: dragging a 3-hour museum into the morning moved Senso-ji
+  from 08:30 to **12:00 PM** and shifted the rest of the day with it, rather
+  than swapping two labels. It degrades exactly right — a day with no
+  durations collapses to the old slot-pinning behaviour, and there's a test
+  pinning that guarantee.
+- **Both prompts now require `durationMinutes` and `estimatedCost` on every
+  stop**, since the schedule runs on those durations and a missing one leaves
+  the day unable to shift.
+- **One icon set.** `CATEGORY_LABELS` was emoji, which put 🏛️ directly beside
+  a lucide wallet and a lucide clock in the same chip row — two drawing
+  conventions in one line, and emoji render differently per OS so the app
+  didn't control them anyway. Categories are lucide components now; the
+  string map stays for `<option>`s and aria-labels.
+- **A day has a focal point.** The longest stop is marked as the day's main
+  stop — accent edge, star, one per day. Ties go to the earlier stop so the
+  marker doesn't wander when a day is reordered, and a day with no durations
+  gets no anchor rather than an arbitrary one (`mainStopId`, tested).
+- **Sidebar hierarchy.** Three visually identical pill stacks gave trip
+  history the same weight as day navigation. Days is now primary and sits
+  first; history demotes to a smaller, quieter shelf underneath; the
+  Itinerary/Summary switch became a segmented control so it reads as a mode
+  switch rather than a third list.
+- **`LoadingState`** was the last pre-redesign component — a dashed box round
+  a spinner. It's now skeleton stop cards on the same panel system, so the
+  layout doesn't jump when the itinerary lands.
+- **The dot texture went to the reference's 0.3**, and came off the stops
+  panel entirely. At 0.16 it was invisible; on a panel covered by cards it
+  only ever showed in the gutters and read as a dashed border. It's kept
+  where there's real open space (stat tiles, chart). The **timeline rail is
+  gone** for the same reason — a faint dot and line restating what the
+  ordering already said.
+
+The landing rotation is six images now: the original coconut-beach photo went
+back in alongside the five supplied ones.
 
 ### Bugs found and fixed via live testing (don't reintroduce these)
 
