@@ -39,9 +39,9 @@ Two other keys are **optional** and the app runs fully without them:
 | `OPENROUTER_API_KEY` | No automatic fallback when Gemini is rate-limited            |
 | `PEXELS_API_KEY`     | Trip hero uses a bundled themed photo instead of a real one  |
 
-> **On `npm start`:** this is a Next.js app, so `npm start` runs the
-> *production* server and needs `npm run build` first. For local development
-> use `npm run dev`. Both are listed under [Scripts](#scripts).
+`npm start` also works from a clean checkout — it builds first if there is no
+build yet, then serves the production bundle. Use `npm run dev` while working
+on it, for hot reload.
 
 ---
 
@@ -218,7 +218,7 @@ Every optional item in the brief is implemented:
 | --------------- | --------------------------------------------------- |
 | `npm run dev`   | Development server on port 3000                     |
 | `npm run build` | Production build                                    |
-| `npm start`     | Production server (run `npm run build` first)       |
+| `npm start`     | Production server, building first if needed         |
 | `npm test`      | Vitest suite — 105 tests, no network, no API key    |
 | `npm run lint`  | ESLint                                              |
 
