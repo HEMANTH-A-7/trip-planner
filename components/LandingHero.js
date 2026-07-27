@@ -1,4 +1,5 @@
-import Image from "next/image";
+import HeroBackdrop from "./HeroBackdrop";
+import { LANDING_SEQUENCE } from "@/lib/heroImages";
 
 // The landing pane: a full-height photo with the headline centred in it and
 // the search box sitting at the bottom of the viewport. No sidebar here - the
@@ -19,28 +20,23 @@ import Image from "next/image";
 export default function LandingHero({ status, children }) {
   return (
     <div className="relative isolate flex min-h-[100svh] flex-col px-4 py-[clamp(1rem,4vh,2.5rem)] sm:px-8">
-      <Image
-        src="/beach-hero.jpg"
-        alt=""
-        fill
-        // The LCP element of this route. `preload` rather than `priority` -
-        // the latter is deprecated as of Next 16.
+      {/* No destination has been named yet, so there is nothing for these to
+          contradict - which is exactly why the landing is the one place a
+          rotation belongs. It's also the pitch: anywhere you want.
+          The scrim rides inside the backdrop so it stays above every layer of
+          the crossfade rather than only the first one. */}
+      <HeroBackdrop
+        images={LANDING_SEQUENCE}
+        rotate
         preload
-        sizes="100vw"
-        className="-z-20 object-cover"
-      />
-      {/* Enough scrim for white text over the bright sky, resolving to the
-          page colour at the bottom so the photo doesn't end on a hard edge. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgba(6,12,18,0.30),rgba(6,12,18,0.52)_55%,var(--canvas))]"
+        overlayClassName="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(6,12,18,0.34),rgba(6,12,18,0.56)_55%,var(--canvas))]"
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-[clamp(0.5rem,2vh,1rem)] py-[clamp(1rem,4vh,2.5rem)]">
-        <h1 className="text-center text-[clamp(2rem,7vw,3.75rem)] font-semibold leading-tight tracking-tight text-white drop-shadow">
+        <h1 className="type-display text-center text-[clamp(2.25rem,7.5vw,4.25rem)] text-white drop-shadow">
           Where to next?
         </h1>
-        <p className="mx-auto max-w-xl text-center text-[clamp(0.8125rem,1.6vw,1rem)] text-white/85">
+        <p className="mx-auto max-w-xl text-center text-[clamp(0.8125rem,1.6vw,1rem)] text-white/80">
           Describe your perfect trip in plain language and get an editable,
           day-by-day itinerary.
         </p>
