@@ -94,6 +94,8 @@ validated against `ItinerarySchema`):
 Itinerary = {
   destination: string,
   summary?: string,
+  distanceKm?: number,                                  // total ground distance, drives a summary tile
+  estimatedBudget?: { amount: number, currency: string },// per-person trip total, drives a summary tile
   days: [
     {
       day: number,               // 1-60
@@ -191,6 +193,184 @@ Update the checkboxes above as steps complete. If you're picking this project
 back up in a new session, `git log --oneline` plus this checklist tells you
 exactly where things stand.
 
+### Itinerary card redesign (user supplied reference screenshots)
+
+Reworked the itinerary surface to match two reference designs the user
+provided. Deliberately **no images on the cards** — the reference has photo
+thumbnails, but the user ruled them out to keep AI cost down, so the cards
+are text-only.
+
+- **`components/TripSummary.js` (new)** — three rollup tiles above the
+  itinerary: total stops, distance, estimated budget. Total stops is derived
+  client-side; the other two are model estimates and are optional, so a tile
+  with no data renders a dash rather than collapsing the row. Per the stat-tile
+  contract the value uses a plain ink token and proportional figures (not
+  `tabular-nums`, which makes a number like "120" look loose at display size);
+  only the icon carries an accent.
+- **`lib/tripStats.js` (new)** — `countStops`, `formatDistance`, `formatBudget`,
+  each returning `null` rather than a placeholder when data is missing so the
+  tile owns how a gap looks. Covered by `lib/tripStats.test.js` (18 cases).
+- **`StopCard`** — timeline rail (dot per stop, connector line reaching into
+  the list's row gap), time + title header, always-visible description clamped
+  to two lines, category chip, and three actions: rename, remove, move.
+- **Drag-to-reorder** replaces the old up/down chevron pair. The card is
+  `draggable` **only while the grip is held** (`dragArmed` state) — otherwise
+  selecting card text turns into a drag. Dragged card dims to 40%, the drop
+  target gets a dashed accent outline, and the grip shows a "Move" tooltip on
+  hover/focus.
+- Reorder is a **splice-and-reinsert, not the two-item swap** `moveStop()`
+  does: dragging a card three positions down should leave the cards it passed
+  in their original order. Both operations coexist — arrow keys on the focused
+  grip still use the swap-based `moveStop`.
+- **Inline rename** (the pencil): Enter just blurs the input so commit logic
+  lives on a single path (`onBlur`); Escape sets a ref that makes that same
+  blur discard instead of save. An emptied field restores the old name.
+
+Known gap: HTML5 drag-and-drop is pointer-only, so **touch devices can't
+reorder**. Keyboard users are covered (arrow keys on the focused grip); touch
+would need a pointer-events-based DnD implementation.
+
+### Sidebar shell (second round of the same redesign)
+
+The app now has two layouts, switched on whether an itinerary exists:
+
+- **No itinerary** → unchanged centered landing column (headline, create form,
+  empty/loading/error states). There's nothing for a sidebar to navigate yet.
+- **Itinerary exists** → `Sidebar` + main pane.
+
+`components/Sidebar.js` carries the brand block, "New trip" (wired to the
+existing `handleStartOver`), a two-item nav, and the day list with a stop count
+per day. **Deliberately no Explorer/Settings entries** — the user asked for
+Explorer to be dropped, and Settings would be a nav item pointing at nothing.
+The brand stays "Trip Planner", not the reference mock's "Voyager".
+
+One responsive markup, not a desktop and a mobile copy: below `lg` the aside is
+a header strip whose nav and day list scroll horizontally (`overflow-x-auto`
+inside the list, so the row scrolls rather than the page); at `lg` it becomes
+the sticky 16rem rail.
+
+- `components/TripHero.js` — banner with the **cover-image placeholder**: an
+  accent wash plus a dashed "Cover image" chip. Deliberately an obvious empty
+  slot, not something posing as art. Dropping a real photo in later means
+  setting a background image on the first layer and deleting the chip.
+- `components/SummaryView.js` — the Summary nav target: rollup tiles, the
+  category chart, and a "Day at a glance" list whose rows are also navigation
+  (picking one jumps to that day's cards). No map panel and no "Book this trip"
+  CTA from the reference — neither has anything real behind it.
+- The itinerary view now renders **one day at a time** (the sidebar selection)
+  rather than every day stacked. `components/ItineraryView.js` was deleted;
+  `page.js` renders `DayCard` directly.
+- The refine form moved below the day's cards, and the old "Start a new trip"
+  text link is gone — the sidebar's "New trip" button replaces it.
+
+The selected day is **resolved during render**, not stored:
+`days.find(id) ?? days[0]`. A refinement rebuilds the itinerary with fresh ids,
+so a stored id would go stale on every successful refine; the fallback fixes
+that with no effect syncing state to props.
+
+### Landing page + trip history (third round)
+
+Two layouts, switched on whether a trip exists:
+
+- **No trip** → `LandingHero` only, **no sidebar**: a full-height photo with
+  the headline centred and the search bar sitting at the bottom of the
+  viewport. Streaming previews and errors render in the middle band above the
+  box, so the search bar keeps its place at the bottom.
+- **Trip open** → `Sidebar` + `TripHero` + day cards.
+
+Because the landing has no sidebar, trip history needed a second home there —
+`components/RecentTrips.js`, a card grid below the hero. Without it, hitting
+"New trip" would strand every saved trip with no way back to it.
+
+`components/ExamplePrompts.js` was **deleted** (and `TripForm`'s
+`suggestionsOnSelect` prop with it): the chips said the same thing as the
+textarea's own `e.g. …` placeholder, and cost a lot of vertical space in a
+search box that now sits at the bottom of the hero. Step 22 in the list above
+is therefore no longer true of the current UI.
+
+- **The cover-image placeholder is gone** — both heroes now use a real photo,
+  `public/beach-hero.jpg` (credited in README). One stock image for every
+  destination; the app still does not fetch a photo per trip.
+- Hero text is **fixed white on a dark scrim**, not the theme's ink token —
+  ink flips to near-black in the light theme and would be unreadable over a
+  bright beach photo. The scrim resolves to `var(--canvas)` at the bottom so
+  the photo doesn't end on a hard edge.
+- `EmptyState` was deleted: the landing hero *is* this route's empty state, and
+  a second "no itinerary yet" box under it was pure redundancy.
+- `next/image` with `fill`. **Use `preload`, not `priority`** — `priority` is
+  deprecated as of Next 16. `sizes` accounts for the 16rem rail
+  (`(min-width: 64rem) calc(100vw - 16rem), 100vw`) rather than claiming
+  `100vw`, which would fetch a wider file than is ever painted.
+
+**Trip history** lives under the "New trip" button. `lib/storage.js` gained
+`loadHistory` / `saveToHistory` / `removeFromHistory` against a separate
+`trip-planner:history` key, capped at 10 entries.
+
+- Whole itineraries are stored, not just prompts, so **reopening a trip costs
+  no tokens and hits no network**.
+- A trip carries a `tripId` that survives its own refinements, and the
+  save-as-you-go effect upserts by that id — so history holds the *edited*
+  itinerary (removals, renames, reorderings), not the version first generated,
+  and refining doesn't append a new entry per edit.
+- Deleting the trip that's currently open also clears the workspace, rather
+  than leaving the sidebar pointing at something that no longer exists.
+
+**Dev-only gotcha worth not re-debugging:** the first request for a given
+`/_next/image` variant fails in `next dev` (the `<img>` reports
+`complete: true` with `naturalWidth: 0`) and succeeds on reload once the
+optimizer has cached it. Verified this is dev-only by running `next start` on
+port 3100 — in a production build the image loads on the very first paint, and
+the optimizer returns 41KB/107KB/292KB at w=640/1080/1920.
+
+### Per-stop cost/duration, in-box streaming, responsive rebuild (fourth round)
+
+**Streaming preview moved inside the search box.** `components/StreamingPreview.js`
+was deleted; `TripForm` now takes a `streamingText` prop and renders it as an
+**overlay absolutely positioned on top of the textarea**, not as a sibling.
+That's the whole trick behind "don't make the box any bigger" — the textarea
+underneath still defines the height, the overlay just covers it, so the box is
+byte-identical in size whether idle or streaming (measured: 169px in both
+states). The overlay auto-scrolls to the newest tokens, since a box that can't
+grow would otherwise silently fill past its own bottom. The character counter
+swaps to "Generating…" while it runs.
+
+**Per-stop cost breakdown.** `StopSchema` gained `estimatedCost {amount,
+currency}` and `durationMinutes`, rendered as chips beside the category tag.
+`formatStopCost` treats **amount 0 as "Free", not as missing data** — a free
+viewpoint is a real answer and the prompt explicitly tells the model to send 0
+rather than omit the field. Both system prompts now also ask for 2-3 sentence
+descriptions with one actionable detail each, since every stop is read on its
+own card; `description` max went 400 → 700 to fit that.
+
+**Responsive rebuild — this was a real bug, not just polish.** The landing hero
+overflowed its own `100vh` on any short window (reproduced at 1100×620: page
+was 1505px tall in a 728px viewport, pushing the search bar off-screen). Fixes:
+
+- `app/layout.js` no longer sets `h-full` on `<html>` + `min-h-full` on
+  `<body>`. Pinning `<html>` to `height:100%` while page sections ask for
+  viewport-height units gives two competing definitions of "full height".
+  Page containers own their min-height; body just paints the canvas, which
+  propagates to the viewport.
+- **`svh`/`dvh`, not `vh`.** On mobile browsers `vh` measures against the
+  viewport with the URL bar *hidden*, so a `100vh` hero is taller than the
+  screen on first paint — exactly the thing that hides a bottom-anchored
+  search bar.
+- Hero type and padding are `clamp()`ed, so short windows compress instead of
+  overflowing. Content column is `max-w-3xl xl:max-w-4xl` so wide screens
+  aren't mostly empty margin.
+
+**Mobile:** touch targets raised (card actions 28→36px below `sm`, checklist
+boxes 16→20px). The important one: history/recent **delete buttons were
+`opacity-0` until hover, and touch devices have no hover** — they were
+effectively unreachable on a phone. Now always visible below `sm`,
+hover-revealed from `sm` up.
+
+Verified with real window resizing (not just iframes): live resize now reflows
+the sidebar between strip and sticky rail with no reload, and there's no
+horizontal overflow at 375 / 420 / 606 / 1100 / 1500 / 1600px. Note Chrome on
+macOS won't size a window below ~600px wide, so true phone widths still need
+the iframe trick.
+
 ### Bugs found and fixed via live testing (don't reintroduce these)
 
 - Gemini's `responseJsonSchema` returns a 400 `INVALID_ARGUMENT` when
@@ -253,10 +433,13 @@ exactly where things stand.
 Everything from the original plan is done and pushed:
 https://github.com/HEMANTH-A-7/trip-planner (public).
 
-- **Actually verify mobile layout on a real narrow viewport** (step 16) —
-  still outstanding, couldn't be done from within this tool environment.
-  Check on a real phone or Chrome DevTools' device toolbar before treating
-  the mobile requirement as fully verified.
+- **Mobile layout** — verifiable from the tooling after all, via a trick worth
+  reusing: the browser extension can't actually shrink the real viewport, but
+  injecting an `<iframe>` at a fixed CSS width (390px) pointed at localhost
+  works, because an iframe gets its own independent layout viewport. Checked
+  this way for the card redesign (no horizontal overflow, long stop names wrap,
+  summary tiles hold three columns). Still worth a glance on a real phone
+  before final submission.
 - Adjust the "Time spent" figure in README.md to your own actual elapsed
   time — the number currently there is an estimate written from the
   assistant's side of the session, not a real clock measurement.

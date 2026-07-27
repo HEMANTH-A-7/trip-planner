@@ -138,6 +138,15 @@ key straight into a local file — worth rotating if that matters to you.
   handful of free OpenRouter models for schema adherence; free-tier model
   availability on OpenRouter can change without notice.
 
+## Credits
+
+`public/beach-hero.jpg` — photo by Simon Spring on
+[Unsplash](https://unsplash.com/photos/BJ-FvNGCfEY), used under the Unsplash
+License. Downscaled to 2000px and recompressed for the web; the 10MB original
+is not in the repo. It's the one stock image the app ships, used for both the
+landing banner and the itinerary banner — the app does not fetch a photo per
+destination.
+
 ## Time spent
 
 Roughly 4–5 hours in a single extended session (this is an estimate from the
