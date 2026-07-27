@@ -206,7 +206,15 @@ function Layer({
         };
       }}
       className={`object-cover ${className}`}
-      style={{ objectPosition: image.position ?? "50% 50%", ...style }}
+      style={{
+        objectPosition: image.position ?? "50% 50%",
+        // Scaled up alongside the blur so the softened edges are pushed
+        // outside the frame instead of showing as a pale border.
+        ...(image.blurred
+          ? { filter: "blur(22px) saturate(0.85)", transform: "scale(1.12)" }
+          : null),
+        ...style,
+      }}
     />
   );
 }

@@ -44,11 +44,23 @@ export default function TripHero({ itinerary, dayCount }) {
     return () => controller.abort();
   }, [destination]);
 
+  // A found photo is shown sharp: it is a claim, and the claim is true.
+  //
+  // A fallback is shown blurred, because the bundled images are recognisable
+  // places, not generic textures - `historic` is the Taj Mahal and
+  // `metropolis` is Shinjuku in Japanese signage. Sharp, they assert something
+  // false the moment the lookup misses: a Lisbon trip under the Taj Mahal is
+  // exactly the stock-beach-behind-Tokyo problem this was meant to solve.
+  // Blurred, the same file reads as atmosphere in roughly the right key and
+  // asserts nothing at all.
   const images = photo
     ? [{ src: photo.src, position: "50% 50%" }]
-    : [{ src: fallback.src, position: fallback.position }];
+    : [{ src: fallback.src, position: fallback.position, blurred: true }];
 
-  const credit = photo?.credit ?? fallback.credit;
+  // Only the real photo is credited. Pexels requires it for anything served
+  // through their API; the bundled files don't require it, and printing a
+  // photographer's name under the wrong city reads as a caption for it.
+  const credit = photo?.credit ?? null;
 
   return (
     <div className="relative isolate overflow-hidden border-b border-hairline">
