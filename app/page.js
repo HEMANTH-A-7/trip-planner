@@ -20,6 +20,7 @@ import {
   saveToHistory,
 } from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
+import { applySchedule, readSchedule, withSchedule } from "@/lib/schedule";
 import { parseSSE } from "@/lib/sse";
 
 // Slightly above the server's own 30s timeout, so if the server hangs for
@@ -31,42 +32,46 @@ const UNDO_TIMEOUT_MS = 5_000;
 const STATUS = { IDLE: "idle", LOADING: "loading", ERROR: "error", SUCCESS: "success" };
 const VIEW = { ITINERARY: "itinerary", SUMMARY: "summary" };
 
-function removeStop(itinerary, dayId, stopId) {
+// Every structural change to a day goes through here, which is what keeps
+// the day's start times pinned to slots rather than riding along with the
+// stops that move between them - see lib/schedule.js.
+function mapDay(itinerary, dayId, mutate) {
   return {
     ...itinerary,
     days: itinerary.days.map((day) =>
-      day.id !== dayId
-        ? day
-        : { ...day, stops: day.stops.filter((s) => s.id !== stopId) }
+      day.id !== dayId ? day : { ...day, stops: withSchedule(day.stops, mutate) }
     ),
   };
 }
 
-function insertStopAt(itinerary, dayId, stop, index) {
+function removeStop(itinerary, dayId, stopId) {
+  return mapDay(itinerary, dayId, (stops) => stops.filter((s) => s.id !== stopId));
+}
+
+// Undo, so it restores the schedule captured before the removal rather than
+// re-deriving one from the shortened day - otherwise putting a stop back
+// would leave everything after it an hour early.
+function insertStopAt(itinerary, dayId, stop, index, schedule) {
   return {
     ...itinerary,
     days: itinerary.days.map((day) => {
       if (day.id !== dayId) return day;
       const stops = [...day.stops];
       stops.splice(index, 0, stop);
-      return { ...day, stops };
+      return { ...day, stops: applySchedule(stops, schedule) };
     }),
   };
 }
 
 function moveStop(itinerary, dayId, stopId, direction) {
-  return {
-    ...itinerary,
-    days: itinerary.days.map((day) => {
-      if (day.id !== dayId) return day;
-      const index = day.stops.findIndex((s) => s.id === stopId);
-      const target = index + direction;
-      if (index === -1 || target < 0 || target >= day.stops.length) return day;
-      const stops = [...day.stops];
-      [stops[index], stops[target]] = [stops[target], stops[index]];
-      return { ...day, stops };
-    }),
-  };
+  return mapDay(itinerary, dayId, (stops) => {
+    const index = stops.findIndex((s) => s.id === stopId);
+    const target = index + direction;
+    if (index === -1 || target < 0 || target >= stops.length) return stops;
+    const next = [...stops];
+    [next[index], next[target]] = [next[target], next[index]];
+    return next;
+  });
 }
 
 // Drag-and-drop reorder: lift the stop out and reinsert it at the target
@@ -75,20 +80,16 @@ function moveStop(itinerary, dayId, stopId, direction) {
 // the cards it passed in their original order, not fling one of them back up
 // to where the dragged card started.
 function reorderStop(itinerary, dayId, fromIndex, toIndex) {
-  return {
-    ...itinerary,
-    days: itinerary.days.map((day) => {
-      if (day.id !== dayId) return day;
-      const inRange = (i) => i >= 0 && i < day.stops.length;
-      if (fromIndex === toIndex || !inRange(fromIndex) || !inRange(toIndex)) {
-        return day;
-      }
-      const stops = [...day.stops];
-      const [moved] = stops.splice(fromIndex, 1);
-      stops.splice(toIndex, 0, moved);
-      return { ...day, stops };
-    }),
-  };
+  return mapDay(itinerary, dayId, (stops) => {
+    const inRange = (i) => i >= 0 && i < stops.length;
+    if (fromIndex === toIndex || !inRange(fromIndex) || !inRange(toIndex)) {
+      return stops;
+    }
+    const next = [...stops];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    return next;
+  });
 }
 
 function renameStop(itinerary, dayId, stopId, name) {
@@ -370,7 +371,7 @@ export default function Home() {
     // expires finalizes the first (no reinsert for it) in favor of the new
     // one, rather than trying to stack multiple pending undos.
     clearTimeout(undoTimeoutRef.current);
-    setPendingUndo({ dayId, stop, index });
+    setPendingUndo({ dayId, stop, index, schedule: readSchedule(day.stops) });
     undoTimeoutRef.current = setTimeout(() => setPendingUndo(null), UNDO_TIMEOUT_MS);
 
     setItinerary((prev) => removeStop(prev, dayId, stopId));
@@ -379,8 +380,8 @@ export default function Home() {
   function handleUndoRemove() {
     if (!pendingUndo) return;
     clearTimeout(undoTimeoutRef.current);
-    const { dayId, stop, index } = pendingUndo;
-    setItinerary((prev) => insertStopAt(prev, dayId, stop, index));
+    const { dayId, stop, index, schedule } = pendingUndo;
+    setItinerary((prev) => insertStopAt(prev, dayId, stop, index, schedule));
     setPendingUndo(null);
   }
 
