@@ -1,5 +1,5 @@
 import { MapPin, Route, Wallet } from "lucide-react";
-import { countStops, formatBudget, formatDistance } from "@/lib/tripStats";
+import { countStops, formatBudget, formatDistance, tripBudget } from "@/lib/tripStats";
 
 // Three rollup tiles sitting above the itinerary. Per the stat-tile contract
 // the value stays in the normal ink token (colour would imply an encoding
@@ -17,7 +17,10 @@ export default function TripSummary({ itinerary }) {
       stat: { value: String(countStops(itinerary)), unit: null },
     },
     { icon: Route, label: "Distance", stat: formatDistance(itinerary.distanceKm) },
-    { icon: Wallet, label: "Est. budget", stat: formatBudget(itinerary.estimatedBudget) },
+    // tripBudget(), not the raw model estimate: this re-derives from the
+    // stops currently on the board, so removing or repricing a card moves
+    // the number immediately.
+    { icon: Wallet, label: "Est. budget", stat: formatBudget(tripBudget(itinerary)) },
   ];
 
   return (
