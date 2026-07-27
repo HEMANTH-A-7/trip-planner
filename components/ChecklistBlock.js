@@ -1,7 +1,7 @@
 export default function ChecklistBlock({ items, onToggle }) {
   return (
-    <div className="mt-3 rounded-2xl border border-hairline bg-surface-2 p-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-subtle">
+    <div className="panel mt-2.5 rounded-[18px] p-4 sm:rounded-[20px]">
+      <p className="type-label mb-2.5">
         Packing checklist
       </p>
       <ul className="flex flex-col gap-1.5">
@@ -12,7 +12,7 @@ export default function ChecklistBlock({ items, onToggle }) {
                 type="checkbox"
                 checked={item.checked}
                 onChange={() => onToggle(item.id)}
-                className="h-5 w-5 shrink-0 accent-accent-lavender sm:h-4 sm:w-4"
+                className="h-5 w-5 shrink-0 accent-[var(--accent)] sm:h-4 sm:w-4"
               />
               <span className={item.checked ? "text-ink-subtle line-through" : "text-ink-muted"}>
                 {item.text}

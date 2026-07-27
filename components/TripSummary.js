@@ -28,16 +28,18 @@ export default function TripSummary({ itinerary }) {
       {tiles.map(({ icon: Icon, label, stat }) => (
         <div
           key={label}
-          className="rounded-2xl border border-hairline bg-surface p-3 sm:p-4"
+          className="texture-dots panel relative isolate overflow-hidden rounded-[20px] p-4 sm:p-5"
         >
-          <Icon aria-hidden size={18} className="text-accent-peach" />
+          <Icon aria-hidden size={17} className="text-accent" />
           {/* dt before dd in the DOM so it reads as "label, value" to a
               screen reader; column-reverse puts the number on top visually. */}
-          <div className="mt-2 flex flex-col-reverse">
-            <dt className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-ink-subtle sm:text-[11px]">
+          <div className="mt-4 flex flex-col-reverse">
+            <dt className="type-label mt-1.5 text-[10px] sm:text-[11px]">
               {label}
             </dt>
-            <dd className="text-xl font-semibold leading-none text-ink sm:text-2xl">
+            {/* The reference reserves its warm gradient for exactly this:
+                the one figure a tile exists to show. */}
+            <dd className="type-display text-warm text-[26px] leading-none sm:text-[32px]">
               {stat ? (
                 <>
                   {stat.value}

@@ -12,7 +12,7 @@ export default function SummaryView({ itinerary, onSelectDay }) {
   return (
     <div className="animate-fade-in flex flex-col gap-8">
       <section>
-        <h2 className="mb-3 text-lg font-semibold tracking-tight text-ink">
+        <h2 className="type-heading mb-3.5 text-[20px] text-ink">
           Trip overview
         </h2>
         <TripSummary itinerary={itinerary} />
@@ -23,7 +23,7 @@ export default function SummaryView({ itinerary, onSelectDay }) {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold tracking-tight text-ink">
+        <h2 className="type-heading mb-3.5 text-[20px] text-ink">
           Day at a glance
         </h2>
         <ul className="flex flex-col gap-2">
@@ -35,20 +35,16 @@ export default function SummaryView({ itinerary, onSelectDay }) {
                 <button
                   type="button"
                   onClick={() => onSelectDay(day.id)}
-                  className="flex w-full items-start gap-3 rounded-2xl border border-hairline bg-surface p-4 text-left transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+                  className="panel flex w-full items-start gap-3.5 rounded-[20px] p-4 text-left transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <span
                     aria-hidden
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-ink"
-                    style={{
-                      background:
-                        "color-mix(in oklab, var(--accent-peach) 25%, transparent)",
-                    }}
+                    className="type-figure flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-2 text-[11px] font-medium text-accent"
                   >
                     {day.day}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-ink">
+                    <span className="type-heading block text-[15px] text-ink">
                       {day.title || `Day ${day.day}`}
                     </span>
                     {shown.length > 0 ? (
@@ -56,7 +52,7 @@ export default function SummaryView({ itinerary, onSelectDay }) {
                         {shown.map((stop) => (
                           <span
                             key={stop.id}
-                            className="max-w-full truncate rounded-full bg-surface-2 px-2 py-1 text-[11px] text-ink-muted"
+                            className="max-w-full truncate rounded-full border border-hairline bg-surface-2 px-2.5 py-1 text-[11px] text-ink-muted"
                           >
                             {stop.name}
                           </span>

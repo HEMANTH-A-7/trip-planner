@@ -9,7 +9,7 @@ export default function UndoToast({ stopName, onUndo }) {
       <button
         type="button"
         onClick={onUndo}
-        className="shrink-0 font-medium text-ink underline underline-offset-2 hover:text-accent-lavender focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+        className="shrink-0 font-medium text-ink underline underline-offset-2 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Undo
       </button>

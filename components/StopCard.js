@@ -7,35 +7,33 @@ import {
   Clock,
   GripVertical,
   Pencil,
+  Star,
   Trash2,
   Wallet,
 } from "lucide-react";
-import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/categories";
+import { CATEGORY_LABELS, categoryIcon } from "@/lib/categories";
 import { formatDuration, formatStopCost } from "@/lib/tripStats";
 import StopEditor from "./StopEditor";
 
 export default function StopCard({
   stop,
+  isAnchor,
   isFirst,
   isLast,
-  isDragging,
-  isDropTarget,
+  isPressed,
+  isLifted,
+  style,
   defaultCurrency,
   onRemove,
   onUpdate,
   onRequestSuggestion,
   onMoveUp,
   onMoveDown,
-  onDragStart,
-  onDragEnter,
-  onDrop,
-  onDragEnd,
+  onPressCard,
+  onPressHandle,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
-  // True only while the grip is held down. The card must not be draggable the
-  // rest of the time, or selecting its text turns into a drag instead.
-  const [dragArmed, setDragArmed] = useState(false);
   // Whether the description actually overflows its two-line clamp - measured
   // rather than guessed from string length, so "Expand details" only shows up
   // when there's genuinely something left to reveal.
@@ -73,8 +71,7 @@ export default function StopCard({
     setEditing(false);
   }
 
-  // The grip is the one reorder control, so it has to work without a mouse
-  // too: HTML5 drag-and-drop is pointer-only, and arrow keys on the focused
+  // Dragging the grip needs a pointer of some kind; arrow keys on the focused
   // handle cover the keyboard case with no extra UI.
   function handleGripKeyDown(event) {
     if (event.key === "ArrowUp" && !isFirst) {
@@ -86,44 +83,27 @@ export default function StopCard({
     }
   }
 
-  const accent = stop.category ? CATEGORY_COLORS[stop.category] : null;
   const cost = formatStopCost(stop.estimatedCost);
   const duration = formatDuration(stop.durationMinutes);
   const hasMeta = Boolean(stop.category || cost || duration);
 
   return (
-    <li className="relative flex gap-3 sm:gap-4">
-      {/* Timeline rail: a dot per stop, joined by a line that reaches into
-          the list's row gap so it meets the next dot. */}
-      <div aria-hidden className="relative w-2.5 shrink-0">
-        <span
-          className={`absolute left-0 top-5 h-2.5 w-2.5 rounded-full border-2 ${
-            isFirst
-              ? "border-accent-peach bg-accent-peach"
-              : "border-hairline-strong bg-surface"
-          }`}
-        />
-        {!isLast && (
-          <span className="absolute bottom-[-1rem] left-[0.4375rem] top-9 w-px bg-hairline-strong" />
-        )}
-      </div>
-
+    <li className="relative" style={style}>
       <article
-        draggable={dragArmed}
-        onDragStart={onDragStart}
-        onDragEnter={onDragEnter}
-        onDragOver={(event) => event.preventDefault()} // required for the drop to fire
-        onDrop={onDrop}
-        onDragEnd={() => {
-          setDragArmed(false);
-          onDragEnd();
-        }}
-        className={`min-w-0 flex-1 rounded-2xl border bg-surface-2 p-4 transition-[opacity,border-color] ${
-          isDragging ? "opacity-40" : "opacity-100"
-        } ${
-          isDropTarget
-            ? "border-dashed border-accent-lavender"
-            : "border-hairline"
+        // Not while the editor is open: holding a card is how you drag it,
+        // but inside a form it's how you reach for a word.
+        onPointerDown={editing ? undefined : onPressCard}
+        className={`liftable min-w-0 flex-1 rounded-[14px] border bg-surface-2 p-3.5 transition-[transform,box-shadow,border-color] duration-150 motion-reduce:transition-none sm:rounded-[16px] sm:p-4 ${
+          isLifted
+            ? "scale-[1.02] cursor-grabbing border-accent shadow-[0_24px_60px_-12px_rgba(0,0,0,0.75)]"
+            : isPressed
+              ? "scale-[0.98] border-hairline"
+              : isAnchor
+                ? // The day's longest stop, and the only card that carries
+                  // the accent. One focal point per day beats either four
+                  // identical blocks or four different sizes.
+                  "border-accent/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--accent)_18%,transparent)] hover:border-accent/70"
+                : "border-hairline hover:border-hairline-strong"
         }`}
       >
         {editing ? (
@@ -137,22 +117,36 @@ export default function StopCard({
           />
         ) : (
           <>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                {stop.time && (
-                  <p className="text-xs font-semibold text-ink-muted">{stop.time}</p>
-                )}
-                <h4 className="mt-0.5 text-[0.9375rem] font-semibold leading-snug text-ink">
-                  {stop.name}
-                </h4>
-              </div>
+            {/* The controls share a line with the time, not with the name.
+                Sat beside the name they took a third of the card's width,
+                which on a phone broke "Tokyo National Museum in Ueno Park"
+                across four lines; the time is short and never fights them. */}
+            <div className="flex items-center justify-between gap-2">
+              {stop.time || isAnchor ? (
+                <p className="type-label flex min-w-0 items-center gap-1.5 text-accent">
+                  {isAnchor && (
+                    <>
+                      <Star size={11} aria-hidden className="shrink-0" />
+                      <span className="truncate">Main stop</span>
+                      {stop.time && (
+                        <span aria-hidden className="text-ink-subtle">
+                          ·
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {stop.time && <span className="type-figure">{stop.time}</span>}
+                </p>
+              ) : (
+                <span />
+              )}
 
-              <div className="flex shrink-0 items-center gap-0.5">
+              <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
                   aria-label={`Edit "${stop.name}"`}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg sm:h-7 sm:w-7 text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg sm:h-7 sm:w-7 text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <Pencil size={14} aria-hidden />
                 </button>
@@ -164,19 +158,17 @@ export default function StopCard({
                 >
                   <Trash2 size={14} aria-hidden />
                 </button>
-                {/* Touch gets its own move controls. The grip beside them
-                    reorders via HTML5 drag-and-drop, which has no touch
-                    equivalent at all - dragstart never fires from a finger -
-                    so on a phone the grip was a button that did nothing, and
-                    its arrow-key fallback needs a keyboard that isn't there.
-                    Two explicit buttons are unglamorous next to a drag, but
-                    they're the only version of this that works one-thumbed. */}
+                {/* Touch keeps its own move controls even though holding a
+                    card now drags it: a drag is a gesture you have to know
+                    about and be able to perform, and these stay for anyone
+                    driving the page through a screen reader, where it isn't
+                    on offer at all. */}
                 <button
                   type="button"
                   onClick={onMoveUp}
                   disabled={isFirst}
                   aria-label={`Move "${stop.name}" earlier`}
-                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender sm:hidden"
+                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-fine:hidden"
                 >
                   <ChevronUp size={16} aria-hidden />
                 </button>
@@ -185,19 +177,25 @@ export default function StopCard({
                   onClick={onMoveDown}
                   disabled={isLast}
                   aria-label={`Move "${stop.name}" later`}
-                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender sm:hidden"
+                  className="flex h-9 w-8 items-center justify-center rounded-lg text-ink-subtle disabled:opacity-25 enabled:active:bg-surface enabled:active:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-fine:hidden"
                 >
                   <ChevronDown size={16} aria-hidden />
                 </button>
 
-                <span className="group/grip relative hidden sm:block">
+                {/* Which controls a card offers follows the pointer, not the
+                    window width: a handle is for aiming, which a finger can't
+                    do at this size, and the buttons are for anyone who can't
+                    perform a drag at all. A narrow desktop window is still a
+                    mouse, and a wide tablet is still a thumb. */}
+                <span className="group/grip relative hidden pointer-fine:block">
                   <button
                     type="button"
-                    onMouseDown={() => setDragArmed(true)}
-                    onMouseUp={() => setDragArmed(false)}
+                    onPointerDown={onPressHandle}
                     onKeyDown={handleGripKeyDown}
                     aria-label={`Move "${stop.name}" — drag, or use the arrow keys`}
-                    className="flex h-9 w-9 cursor-grab items-center justify-center rounded-lg sm:h-7 sm:w-7 text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender active:cursor-grabbing"
+                    // touch-none: the handle is small enough that a finger
+                    // landing on it means the handle, never a scroll.
+                    className="flex h-9 w-9 cursor-grab touch-none items-center justify-center rounded-lg sm:h-7 sm:w-7 text-ink-subtle hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
                   >
                     <GripVertical size={14} aria-hidden />
                   </button>
@@ -211,10 +209,14 @@ export default function StopCard({
               </div>
             </div>
 
+            <h4 className="type-heading mt-1 text-[17px] text-ink">
+              {stop.name}
+            </h4>
+
             {stop.description && (
               <p
                 ref={bodyRef}
-                className={`mt-2 text-sm leading-relaxed text-ink-muted ${
+                className={`mt-2.5 text-[13.5px] leading-[1.55] text-ink-muted ${
                   expanded ? "" : "line-clamp-2"
                 }`}
               >
@@ -223,37 +225,39 @@ export default function StopCard({
             )}
 
             {(hasMeta || isClamped) && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  {/* Chips carry no colour of their own any more. The label
+                      already names the category and leads with a glyph, so a
+                      tint behind it was decoration - and six of them across a
+                      day was the loudest thing on the page. */}
                   {stop.category && (
-                    <span
-                      className="inline-flex min-w-0 items-center rounded-full px-2.5 py-1 text-[11px] font-medium text-ink-muted"
-                      // The tinted background carries the category; the label
-                      // keeps a text token, because the accents are pastels that
-                      // would fail contrast as text on the light theme's white
-                      // surface. No colour dot here - CATEGORY_LABELS already
-                      // leads with an emoji, and the two read as two icons.
-                      style={{
-                        background: `color-mix(in oklab, ${accent} 16%, transparent)`,
-                      }}
-                    >
+                    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink-muted">
+                      {(() => {
+                        const Icon = categoryIcon(stop.category);
+                        return <Icon size={11} aria-hidden className="shrink-0" />;
+                      })()}
                       <span className="truncate">
                         {CATEGORY_LABELS[stop.category] ?? stop.category}
                       </span>
                     </span>
                   )}
                   {cost && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-muted">
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2.5 py-1 text-[11px] text-ink-subtle">
                       <Wallet size={11} aria-hidden />
                       <span className="sr-only">Estimated cost: </span>
-                      {cost}
+                      <span className="type-figure font-medium text-ink">
+                        {cost}
+                      </span>
                     </span>
                   )}
                   {duration && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-muted">
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2.5 py-1 text-[11px] text-ink-subtle">
                       <Clock size={11} aria-hidden />
                       <span className="sr-only">Typical duration: </span>
-                      {duration}
+                      <span className="type-figure font-medium text-ink">
+                        {duration}
+                      </span>
                     </span>
                   )}
                 </div>
@@ -263,7 +267,7 @@ export default function StopCard({
                     type="button"
                     onClick={() => setExpanded((value) => !value)}
                     aria-expanded={expanded}
-                    className="flex shrink-0 items-center gap-1 rounded-lg py-1.5 text-xs font-medium text-ink-subtle hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender sm:py-0"
+                    className="flex shrink-0 items-center gap-1 rounded-lg py-1.5 text-xs font-medium text-ink-subtle transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:py-0"
                   >
                     {expanded ? "Show less" : "Expand details"}
                     <ChevronDown

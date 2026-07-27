@@ -3,35 +3,55 @@
 /* Dark is the base theme (matches flamapp.ai, which has no light toggle);
    the light block below overrides the same variable names so components
    never need dark: variants - they just use bg-canvas/text-ink/etc. */
+/* Values here are flamapp.ai's own, read off its production styles rather
+   than eyeballed from a screenshot. Three of them carry most of the look:
+
+   1. Edges are a real grey (#434343), not white at 8%. An alpha hairline
+      dissolves into whatever it sits on, which is what makes a dark UI read
+      as unfinished no matter how the rest is arranged.
+   2. Panels are a vertical gradient, never a flat fill - light from above.
+   3. Greys are neutral. The old palette was warm-tinted throughout, which
+      left every surface looking slightly dirty rather than deliberately warm;
+      the warmth belongs in the accent, and nowhere else. */
 :root {
   --canvas: #0a0a0a;
-  --surface: #141414;
-  --surface-2: #1b1b1a;
-  --hairline: rgba(255, 255, 255, 0.08);
-  --hairline-strong: rgba(255, 255, 255, 0.16);
-  --ink: #f2f1ee;
-  --ink-muted: #a8a6a1;
-  --ink-subtle: #6f6d69;
-  --accent-peach: #eab99b;
-  --accent-lavender: #b28af0;
-  --accent-mint: #8ec4b6;
-  --accent-gold: #e8cf7a;
+  --surface: #0f0f0f;
+  --surface-2: #1b1b1b;
+  /* The two ends of a panel's fill. */
+  --panel-bottom: #0f0f0f;
+  --panel-top: #232323;
+  --hairline: #434343;
+  --hairline-strong: #6e6d6d;
+  --ink: #f5f5f5;
+  --ink-muted: #b6b6b6;
+  --ink-subtle: #7a7a7a;
+  /* One warm ramp, top to bottom, replacing four unrelated pastels. */
+  --accent-soft: #f4d1be;
+  --accent: #e0a882;
+  --accent-deep: #a06040;
   --danger: #e8887a;
   --danger-bg: rgba(232, 136, 122, 0.12);
+  --dot: rgba(255, 255, 255, 0.35);
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --canvas: #fbfaf7;
+    --canvas: #f4f2ef;
     --surface: #ffffff;
-    --surface-2: #f3f1ec;
-    --hairline: rgba(23, 21, 18, 0.09);
-    --hairline-strong: rgba(23, 21, 18, 0.16);
-    --ink: #18160f;
-    --ink-muted: #6b6862;
-    --ink-subtle: #9b978f;
-    --danger: #c1503f;
-    --danger-bg: rgba(193, 80, 63, 0.08);
+    --surface-2: #faf9f7;
+    --panel-bottom: #f7f5f2;
+    --panel-top: #ffffff;
+    --hairline: #dedad3;
+    --hairline-strong: #bab5ac;
+    --ink: #14120f;
+    --ink-muted: #57534c;
+    --ink-subtle: #8b867d;
+    --accent-soft: #c98553;
+    --accent: #a86134;
+    --accent-deep: #7a4526;
+    --danger: #b8412f;
+    --danger-bg: rgba(184, 65, 47, 0.08);
+    --dot: rgba(20, 18, 15, 0.28);
   }
 }
 
@@ -44,10 +64,9 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-ink-subtle: var(--ink-subtle);
-  --color-accent-peach: var(--accent-peach);
-  --color-accent-lavender: var(--accent-lavender);
-  --color-accent-mint: var(--accent-mint);
-  --color-accent-gold: var(--accent-gold);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
   --color-danger: var(--danger);
   --color-danger-bg: var(--danger-bg);
   --font-sans: var(--font-golos), ui-sans-serif, system-ui, sans-serif;
@@ -58,6 +77,102 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
+  /* The reference sets its type tight everywhere - this is the single
+     biggest difference between "a page with a nice font on it" and type
+     that looks set. Default tracking at these sizes reads as a document. */
+  letter-spacing: -0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* In the components layer so a utility can still override any of it - a card
+   that wants a different border shouldn't have to fight `.panel` with `!`. */
+@layer components {
+/* Headings tighten further the larger they get, which is how the reference
+   holds a 60px headline together without it falling apart into letters. */
+.type-display {
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.type-heading {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+/* The counterpart: small text opens up instead of tightening, so it reads as
+   a deliberate label rather than shrunken body copy. */
+.type-label {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--ink-subtle);
+}
+
+/* Times, costs and durations are figures, and figures should line up: the
+   mono face is already loaded, and tabular digits stop the numbers from
+   jittering as they change. */
+.type-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* A surface with a crisp edge and light falling from above. */
+.panel {
+  background-image: linear-gradient(
+    to top,
+    var(--panel-bottom) 14%,
+    var(--panel-top) 119%
+  );
+  border: 1px solid var(--hairline);
+}
+
+/* The dot matrix the reference lays over its panels: 1px dots on a 20px
+   grid at 30%. Close to invisible on its own, and the thing that keeps a
+   large dark panel from looking like an empty rectangle. */
+.texture-dots::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Behind the content but still inside the card's own stacking context,
+     which is what the `isolate` on the element is there to guarantee. */
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+  background-size: 20px 20px;
+  /* The reference's own value. It only earns this on panels with real open
+     space - on one that's covered by cards it shows solely in the gutters
+     between them and reads as a dashed border, so those panels don't get the
+     class at all rather than getting a watered-down version of it. */
+  opacity: 0.3;
+}
+
+/* The reference's selected state: a solid pill in the ink colour with the
+   canvas showing through the letters. Because both sides are tokens it
+   inverts on its own - a white pill on the dark theme, a near-black one on
+   the light theme - instead of needing a second rule to undo it. */
+.pill-active {
+  background: var(--ink);
+  color: var(--canvas);
+}
+
+/* Warm metal, for figures that deserve emphasis. Vertical, light at the top,
+   exactly as the reference fills its headline numbers. */
+.text-warm {
+  background-image: linear-gradient(
+    var(--accent-soft) 0%,
+    var(--accent-deep) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 }
 
 @keyframes fade-in {
@@ -90,6 +205,62 @@ body {
   animation: fade-up 0.5s ease-out both;
 }
 
+/* The hero crossfade. A CSS animation rather than a transition on purpose:
+   a transition has to be started from JS on a later frame, which means
+   waiting for requestAnimationFrame - and rAF doesn't run in a background
+   tab, so the fade can be left stalled half-done. An animation starts itself
+   the moment the element is committed, with nothing to schedule. */
+@keyframes hero-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hero-fade-in {
+  animation: hero-fade var(--hero-fade-ms, 1400ms) ease-in-out forwards;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-in {
+    animation-duration: 1ms;
+  }
+}
+
+/* Skeleton bars: a highlight travelling left to right, rather than a block
+   pulsing its opacity. The sweep reads as "something is arriving"; a pulse
+   reads as "something is broken and blinking at you". */
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--hairline) 0%,
+    color-mix(in oklab, var(--hairline) 45%, var(--ink)) 50%,
+    var(--hairline) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--hairline);
+  }
+}
+
 /* Moving left-to-right gradient sweep, shared by the border-beam search
    input and the gradient headline text below. */
 @keyframes gradient-sweep {
@@ -98,17 +269,22 @@ body {
   }
 }
 
+/* The search box keeps its original four-colour sweep, by request. The four
+   hues are literals rather than tokens on purpose: they were the old palette,
+   nothing else in the app uses them any more, and naming them as palette
+   entries would invite them back onto other surfaces. They belong to this one
+   element now. */
 .gradient-border {
   position: relative;
   border-radius: 20px;
   padding: 1.5px;
   background-image: linear-gradient(
     90deg,
-    var(--accent-peach),
-    var(--accent-lavender),
-    var(--accent-mint),
-    var(--accent-gold),
-    var(--accent-peach)
+    #eab99b,
+    #b28af0,
+    #8ec4b6,
+    #e8cf7a,
+    #eab99b
   );
   background-size: 200% 100%;
   animation: gradient-sweep 5s linear infinite;
@@ -120,27 +296,46 @@ body {
   animation-duration: 2.5s;
 }
 
+/* The headline treatment from the reference: cream falling to dusty rose,
+   held on one diagonal rather than cycling. */
 .text-gradient {
   background-image: linear-gradient(
-    90deg,
-    var(--accent-peach),
-    var(--accent-lavender),
-    var(--accent-mint),
-    var(--accent-gold),
-    var(--accent-peach)
+    83deg,
+    #fdfbf5 1%,
+    var(--accent-soft) 60%,
+    #dcb7ad 99%
   );
-  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: gradient-sweep 8s linear infinite;
+}
+
+@media (prefers-color-scheme: light) {
+  .text-gradient {
+    background-image: linear-gradient(
+      83deg,
+      var(--accent-deep) 1%,
+      var(--accent) 60%,
+      var(--accent-deep) 99%
+    );
+  }
+}
+
+/* A card you can pick up by holding it. Touch platforms spend that same
+   gesture on selecting text and, on iOS, on the callout menu - both of which
+   land in the middle of the drag - so they're stood down where holding means
+   something else, and left alone everywhere else. */
+@media (hover: none) {
+  .liftable {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-fade-up,
-  .gradient-border,
-  .text-gradient {
+  .gradient-border {
     animation: none;
   }
 }

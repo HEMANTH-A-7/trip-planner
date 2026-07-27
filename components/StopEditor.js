@@ -36,14 +36,14 @@ function toOptionalNumber(raw, { min, max, integer }) {
 }
 
 function fieldClass(extra = "") {
-  return `w-full rounded-lg border border-hairline-strong bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent-lavender ${extra}`;
+  return `w-full rounded-lg border border-hairline-strong bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:ring-2 focus:ring-accent ${extra}`;
 }
 
 function Label({ htmlFor, children }) {
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-ink-subtle"
+      className="type-label mb-1.5 block"
     >
       {children}
     </label>
@@ -350,8 +350,8 @@ export default function StopEditor({
           )}
 
           {suggestion && (
-            <div className="rounded-xl border border-dashed border-accent-lavender bg-surface p-3">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-subtle">
+            <div className="rounded-xl border border-dashed border-accent bg-surface p-3">
+              <p className="type-label mb-1.5 text-[10px]">
                 Suggested replacement
               </p>
               <p className="text-sm font-semibold text-ink">{suggestion.name}</p>

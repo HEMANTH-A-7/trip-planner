@@ -12,7 +12,7 @@ export default function RecentTrips({ history, onLoadTrip, onDeleteTrip }) {
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-8">
-      <h2 className="text-lg font-semibold tracking-tight text-ink">
+      <h2 className="type-heading text-[20px] text-ink">
         Recent trips
       </h2>
       <p className="mt-1 text-sm text-ink-muted">
@@ -26,13 +26,13 @@ export default function RecentTrips({ history, onLoadTrip, onDeleteTrip }) {
             <button
               type="button"
               onClick={() => onLoadTrip(trip)}
-              className="w-full rounded-2xl border border-hairline bg-surface p-4 pr-10 text-left transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+              className="w-full rounded-2xl border border-hairline bg-surface p-4 pr-10 text-left transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <span className="flex items-center gap-2">
                 <MapPin
                   size={14}
                   aria-hidden
-                  className="shrink-0 text-accent-peach"
+                  className="shrink-0 text-accent-soft"
                 />
                 <span className="min-w-0 truncate font-medium text-ink">
                   {trip.destination}

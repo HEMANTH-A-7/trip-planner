@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS } from "@/lib/categories";
+import { CATEGORY_LABELS, categoryIcon } from "@/lib/categories";
 
 // A single-series magnitude comparison (stop count per category), so per the
 // data-viz method this gets one accent hue rather than a categorical palette
@@ -24,8 +24,8 @@ export default function TripOverviewChart({ itinerary }) {
   const max = Math.max(...rows.map((r) => r.count));
 
   return (
-    <figure className="rounded-2xl border border-hairline bg-surface p-4">
-      <figcaption className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-subtle">
+    <figure className="texture-dots panel relative isolate overflow-hidden rounded-[20px] p-5">
+      <figcaption className="type-label mb-4">
         Stops by category
       </figcaption>
       <ul className="flex flex-col gap-2">
@@ -35,16 +35,20 @@ export default function TripOverviewChart({ itinerary }) {
             className="grid grid-cols-[8.5rem_1fr_1.5rem] items-center gap-2 text-sm"
             aria-label={`${CATEGORY_LABELS[category] ?? category}: ${count}`}
           >
-            <span className="truncate text-ink-muted">
-              {CATEGORY_LABELS[category] ?? category}
+            <span className="flex min-w-0 items-center gap-2 text-ink-muted">
+              {(() => {
+                const Icon = categoryIcon(category);
+                return <Icon size={13} aria-hidden className="shrink-0 text-ink-subtle" />;
+              })()}
+              <span className="truncate">{CATEGORY_LABELS[category] ?? category}</span>
             </span>
-            <span aria-hidden className="h-5 rounded-full bg-surface-2">
+            <span aria-hidden className="h-5 rounded-full border border-hairline bg-surface-2">
               <span
-                className="block h-full rounded-full bg-accent-lavender"
+                className="block h-full rounded-full bg-[linear-gradient(90deg,var(--accent-deep),var(--accent-soft))]"
                 style={{ width: `${(count / max) * 100}%` }}
               />
             </span>
-            <span aria-hidden className="text-right text-ink-muted tabular-nums">
+            <span aria-hidden className="type-figure text-right text-ink">
               {count}
             </span>
           </li>

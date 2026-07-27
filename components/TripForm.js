@@ -111,7 +111,7 @@ export default function TripForm({
             <button
               type="submit"
               disabled={disabled || !value.trim()}
-              className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-canvas transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-canvas transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {disabled ? pendingLabel : submitLabel}
             </button>

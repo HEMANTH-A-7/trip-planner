@@ -45,15 +45,12 @@ export default function Sidebar({
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink"
-            style={{
-              background: "color-mix(in oklab, var(--accent-lavender) 25%, transparent)",
-            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-2 text-accent"
           >
-            <Compass size={18} />
+            <Compass size={17} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-semibold tracking-tight text-ink">
+            <span className="type-heading block truncate text-[15px] text-ink">
               Trip Planner
             </span>
             <span className="block truncate text-[11px] text-ink-subtle">
@@ -62,18 +59,93 @@ export default function Sidebar({
           </span>
         </div>
 
+        {/* The reference's primary action: a solid pill, ink on canvas. */}
         <button
           type="button"
           onClick={onStartOver}
-          className="flex items-center justify-center gap-2 rounded-xl border border-hairline-strong bg-surface-2 px-3 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
+          className="pill-active flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           <Plus size={16} aria-hidden />
           New trip
         </button>
 
+        {/* A segmented control, not a third pill list. Three stacked groups of
+            identical pills gave trip history the same weight as the day
+            navigation; this is a mode switch and should look like one. */}
+        <nav
+          aria-label="Views"
+          className="flex gap-1 rounded-full border border-hairline bg-surface-2 p-1"
+        >
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+            const active = Boolean(itinerary) && view === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onViewChange(id)}
+                disabled={!itinerary}
+                aria-current={active ? "page" : undefined}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-[13.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40 ${
+                  active
+                    ? "pill-active"
+                    : "text-ink-subtle enabled:hover:text-ink"
+                }`}
+              >
+                <Icon size={15} aria-hidden className="shrink-0" />
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="min-w-0">
+          <p className="type-label mb-2.5 text-ink-muted">Days</p>
+          {itinerary ? (
+            /* Horizontal scroller on narrow screens, stacked list on the rail.
+               EdgeScroller adds the faded chevron that tells a phone user the
+               row keeps going; it takes itself off at `lg`, where the list
+               stacks and there's no overflow left to point at. */
+            <EdgeScroller className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:pb-0">
+              {itinerary.days.map((day) => {
+                const active = day.id === selectedDayId && view === "itinerary";
+                return (
+                  <li key={day.id} className="shrink-0 lg:shrink">
+                    <button
+                      type="button"
+                      onClick={() => onSelectDay(day.id)}
+                      aria-current={active ? "true" : undefined}
+                      className={`w-full rounded-[18px] px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                        active
+                          ? "pill-active"
+                          : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                      }`}
+                    >
+                      <span className="type-heading block whitespace-nowrap text-[15px] lg:whitespace-normal">
+                        Day {day.day}
+                        {day.title ? `: ${day.title}` : ""}
+                      </span>
+                      <span
+                        className={`type-figure mt-0.5 block text-[11px] ${
+                          active ? "opacity-55" : "text-ink-subtle"
+                        }`}
+                      >
+                        {day.stops.length}{" "}
+                        {day.stops.length === 1 ? "stop" : "stops"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </EdgeScroller>
+          ) : (
+            <p className="px-3 py-2 text-xs text-ink-subtle">
+              Plan a trip to see its days here.
+            </p>
+          )}
+        </div>
         {history.length > 0 && (
           <div className="min-w-0">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-ink-subtle">
+            <p className="type-label mb-2.5 flex items-center gap-1.5">
               <History size={12} aria-hidden />
               Trip history
             </p>
@@ -86,16 +158,20 @@ export default function Sidebar({
                       type="button"
                       onClick={() => onLoadTrip(trip)}
                       aria-current={active ? "true" : undefined}
-                      className={`w-full rounded-xl py-2 pl-3 pr-8 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender ${
+                      className={`w-full rounded-full py-1.5 pl-3 pr-8 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                         active
                           ? "bg-surface-2 text-ink"
-                          : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                          : "text-ink-subtle hover:bg-surface-2 hover:text-ink-muted"
                       }`}
                     >
-                      <span className="block truncate whitespace-nowrap text-sm font-medium">
+                      <span className="block truncate whitespace-nowrap text-[13px] font-medium">
                         {trip.destination}
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-ink-subtle">
+                      <span
+                        className={`mt-0.5 block text-[11px] ${
+                          active ? "opacity-55" : "text-ink-subtle"
+                        }`}
+                      >
                         {[
                           relativeDay(trip.savedAt),
                           `${trip.itinerary.days.length} ${
@@ -121,72 +197,6 @@ export default function Sidebar({
           </div>
         )}
 
-        <nav aria-label="Views" className="flex gap-2 lg:flex-col lg:gap-1">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-            const active = Boolean(itinerary) && view === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onViewChange(id)}
-                disabled={!itinerary}
-                aria-current={active ? "page" : undefined}
-                className={`flex flex-1 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender disabled:cursor-not-allowed disabled:opacity-40 lg:flex-none ${
-                  active
-                    ? "bg-surface-2 text-ink"
-                    : "text-ink-muted enabled:hover:bg-surface-2 enabled:hover:text-ink"
-                }`}
-              >
-                <Icon size={16} aria-hidden className="shrink-0" />
-                {label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="min-w-0">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-subtle">
-            Days
-          </p>
-          {itinerary ? (
-            /* Horizontal scroller on narrow screens, stacked list on the rail.
-               EdgeScroller adds the faded chevron that tells a phone user the
-               row keeps going; it takes itself off at `lg`, where the list
-               stacks and there's no overflow left to point at. */
-            <EdgeScroller className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:pb-0">
-              {itinerary.days.map((day) => {
-                const active = day.id === selectedDayId && view === "itinerary";
-                return (
-                  <li key={day.id} className="shrink-0 lg:shrink">
-                    <button
-                      type="button"
-                      onClick={() => onSelectDay(day.id)}
-                      aria-current={active ? "true" : undefined}
-                      className={`w-full rounded-xl px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender ${
-                        active
-                          ? "bg-surface-2 text-ink"
-                          : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-                      }`}
-                    >
-                      <span className="block whitespace-nowrap text-sm font-medium lg:whitespace-normal">
-                        Day {day.day}
-                        {day.title ? `: ${day.title}` : ""}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] text-ink-subtle">
-                        {day.stops.length}{" "}
-                        {day.stops.length === 1 ? "stop" : "stops"}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </EdgeScroller>
-          ) : (
-            <p className="px-3 py-2 text-xs text-ink-subtle">
-              Plan a trip to see its days here.
-            </p>
-          )}
-        </div>
       </div>
     </aside>
   );
