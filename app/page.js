@@ -3,12 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import TripForm from "@/components/TripForm";
 import LoadingState from "@/components/LoadingState";
-import StreamingPreview from "@/components/StreamingPreview";
 import ErrorState from "@/components/ErrorState";
-import EmptyState from "@/components/EmptyState";
-import ItineraryView from "@/components/ItineraryView";
+import Sidebar from "@/components/Sidebar";
+import TripHero from "@/components/TripHero";
+import LandingHero from "@/components/LandingHero";
+import RecentTrips from "@/components/RecentTrips";
+import SummaryView from "@/components/SummaryView";
+import DayCard from "@/components/DayCard";
 import UndoToast from "@/components/UndoToast";
-import { clearSession, loadSession, saveSession } from "@/lib/storage";
+import {
+  clearSession,
+  loadHistory,
+  loadSession,
+  removeFromHistory,
+  saveSession,
+  saveToHistory,
+} from "@/lib/storage";
 import { stripIds } from "@/lib/schema";
 import { parseSSE } from "@/lib/sse";
 
@@ -19,6 +29,7 @@ const CLIENT_TIMEOUT_MS = 35_000;
 const UNDO_TIMEOUT_MS = 5_000;
 
 const STATUS = { IDLE: "idle", LOADING: "loading", ERROR: "error", SUCCESS: "success" };
+const VIEW = { ITINERARY: "itinerary", SUMMARY: "summary" };
 
 function removeStop(itinerary, dayId, stopId) {
   return {
@@ -56,6 +67,50 @@ function moveStop(itinerary, dayId, stopId, direction) {
       return { ...day, stops };
     }),
   };
+}
+
+// Drag-and-drop reorder: lift the stop out and reinsert it at the target
+// index, shifting everything between. Deliberately not the literal two-item
+// swap moveStop() does - dragging a card three positions down should leave
+// the cards it passed in their original order, not fling one of them back up
+// to where the dragged card started.
+function reorderStop(itinerary, dayId, fromIndex, toIndex) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) => {
+      if (day.id !== dayId) return day;
+      const inRange = (i) => i >= 0 && i < day.stops.length;
+      if (fromIndex === toIndex || !inRange(fromIndex) || !inRange(toIndex)) {
+        return day;
+      }
+      const stops = [...day.stops];
+      const [moved] = stops.splice(fromIndex, 1);
+      stops.splice(toIndex, 0, moved);
+      return { ...day, stops };
+    }),
+  };
+}
+
+function renameStop(itinerary, dayId, stopId, name) {
+  return {
+    ...itinerary,
+    days: itinerary.days.map((day) =>
+      day.id !== dayId
+        ? day
+        : {
+            ...day,
+            stops: day.stops.map((stop) =>
+              stop.id === stopId ? { ...stop, name } : stop
+            ),
+          }
+    ),
+  };
+}
+
+// Identifies a trip across its own refinements, so history updates the same
+// entry rather than appending one per edit. Only ever compared, never parsed.
+function makeTripId() {
+  return `trip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function toggleChecklistItem(itinerary, dayId, itemId) {
@@ -99,6 +154,15 @@ export default function Home() {
   const [refinePromptText, setRefinePromptText] = useState("");
   // null = not streaming; "" or more = live text accumulated so far.
   const [streamingText, setStreamingText] = useState(null);
+  // Which half of the app the sidebar is pointing at, and which day's cards
+  // the itinerary view is showing.
+  const [view, setView] = useState(VIEW.ITINERARY);
+  const [selectedDayId, setSelectedDayId] = useState(null);
+  // Past trips, newest first, and the id of the one currently open. A trip
+  // keeps its id across refinements so edits update its history entry in
+  // place instead of piling up a new entry per edit.
+  const [history, setHistory] = useState([]);
+  const [tripId, setTripId] = useState(null);
 
   // Restore a previous session on load. Deliberately an effect rather than a
   // lazy useState initializer: a lazy initializer would run during the
@@ -107,13 +171,15 @@ export default function Home() {
   // hydration mismatch. Running this post-mount, client-only, is correct
   // here despite the lint rule's generic advice against setState-in-effect.
   useEffect(() => {
-    const session = loadSession();
-    if (!session) return;
     /* eslint-disable react-hooks/set-state-in-effect --
        one-time hydration from localStorage, see comment above */
+    setHistory(loadHistory());
+    const session = loadSession();
+    if (!session) return;
     setItinerary(session.itinerary);
     setStatus(STATUS.SUCCESS);
     setPromptText(session.prompt ?? "");
+    setTripId(session.tripId ?? null);
     /* eslint-enable react-hooks/set-state-in-effect */
     lastPromptRef.current = session.prompt ?? "";
   }, []);
@@ -123,11 +189,25 @@ export default function Home() {
   // promptText (the original trip description) rather than
   // lastPromptRef.current, which tracks whichever request ran most
   // recently and would leak a refinement instruction into the main field.
+  //
+  // The same write keeps the trip's history entry current, so reopening it
+  // later restores the edited itinerary rather than the freshly generated one.
   useEffect(() => {
-    if (status === STATUS.SUCCESS && itinerary) {
-      saveSession({ itinerary, prompt: promptText });
-    }
-  }, [itinerary, status, promptText]);
+    if (status !== STATUS.SUCCESS || !itinerary) return;
+    saveSession({ itinerary, prompt: promptText, tripId });
+    if (!tripId) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect --
+       mirroring what was just written to localStorage, not deriving state */
+    setHistory(
+      saveToHistory({
+        id: tripId,
+        destination: itinerary.destination,
+        prompt: promptText,
+        savedAt: Date.now(),
+        itinerary,
+      })
+    );
+  }, [itinerary, status, promptText, tripId]);
 
   // Not a state-hydration concern like the two effects above - just
   // clearing a plain timer on unmount so it can't fire setState afterward.
@@ -180,6 +260,9 @@ export default function Home() {
         return;
       }
 
+      // A refine edits the open trip and keeps its id; a create starts a new
+      // one and therefore a new history entry.
+      if (mode !== "refine") setTripId(makeTripId());
       setItinerary(data.itinerary);
       setStatus(STATUS.SUCCESS);
       return true;
@@ -237,6 +320,7 @@ export default function Home() {
           setStreamingText((prev) => (prev ?? "") + event.text);
         } else if (event.type === "done") {
           setStreamingText(null);
+          setTripId(makeTripId()); // streaming is create-only, always a new trip
           setItinerary(event.itinerary);
           setStatus(STATUS.SUCCESS);
           return;
@@ -304,6 +388,45 @@ export default function Home() {
     setItinerary((prev) => moveStop(prev, dayId, stopId, direction));
   }
 
+  function handleReorderStop(dayId, fromIndex, toIndex) {
+    setItinerary((prev) => reorderStop(prev, dayId, fromIndex, toIndex));
+  }
+
+  function handleRenameStop(dayId, stopId, name) {
+    setItinerary((prev) => renameStop(prev, dayId, stopId, name));
+  }
+
+  function handleSelectDay(dayId) {
+    setSelectedDayId(dayId);
+    setView(VIEW.ITINERARY);
+  }
+
+  // Reopening a stored trip is purely local - no request, no tokens spent.
+  // Any in-flight request is marked stale first so a slow response can't
+  // overwrite the trip that was just opened.
+  function handleLoadTrip(trip) {
+    abortControllerRef.current?.abort();
+    requestIdRef.current += 1;
+    setItinerary(trip.itinerary);
+    setTripId(trip.id);
+    setPromptText(trip.prompt ?? "");
+    setStatus(STATUS.SUCCESS);
+    setError(null);
+    setStreamingText(null);
+    setRefinePromptText("");
+    setSelectedDayId(null); // falls back to day 1, see selectedDay below
+    setView(VIEW.ITINERARY);
+    lastPromptRef.current = trip.prompt ?? "";
+  }
+
+  function handleDeleteTrip(id) {
+    setHistory(removeFromHistory(id));
+    // Deleting the trip that's currently open would leave the sidebar
+    // pointing at something that no longer exists, so clear the workspace
+    // too - the itinerary itself is what was just discarded.
+    if (id === tripId) handleStartOver();
+  }
+
   function handleToggleChecklistItem(dayId, itemId) {
     setItinerary((prev) => toggleChecklistItem(prev, dayId, itemId));
   }
@@ -323,84 +446,125 @@ export default function Home() {
     setStreamingText(null);
     setPromptText("");
     setRefinePromptText("");
+    setView(VIEW.ITINERARY);
+    setSelectedDayId(null);
+    setTripId(null);
     lastPromptRef.current = "";
   }
 
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-canvas px-4 py-10 sm:px-6 sm:py-16">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-[-160px] -z-10 flex justify-center"
-      >
-        <div className="h-[420px] w-[640px] rounded-full bg-[radial-gradient(closest-side,var(--accent-lavender),transparent_70%)] opacity-20 blur-3xl" />
-        <div className="absolute left-1/3 top-24 h-[280px] w-[380px] rounded-full bg-[radial-gradient(closest-side,var(--accent-peach),transparent_70%)] opacity-20 blur-3xl" />
-      </div>
+  // Resolved rather than stored in state: a refinement rebuilds the itinerary
+  // with fresh ids, so the selected id goes stale on every successful refine.
+  // Falling back to the first day here means that fixes itself, with no effect
+  // syncing state to props.
+  const selectedDay =
+    itinerary?.days.find((day) => day.id === selectedDayId) ??
+    itinerary?.days[0] ??
+    null;
 
-      <main className="relative mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <header className="animate-fade-up">
-          <h1 className="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            <span className="text-gradient">Trip</span> Planner
-          </h1>
-          <p className="mt-2 text-sm text-ink-muted sm:text-base">
-            Describe a trip in plain language and get an editable, day-by-day
-            itinerary.
-          </p>
-        </header>
-
-        {/* One box, not two: before an itinerary exists it creates one,
-            after it exists the same box refines it in place. */}
-        {itinerary && (
-          <button
-            type="button"
-            onClick={handleStartOver}
-            className="self-end text-xs text-ink-subtle underline underline-offset-2 hover:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-lavender"
-          >
-            Start a new trip
-          </button>
-        )}
-        <TripForm
-          id={itinerary ? "refine-prompt" : "trip-prompt"}
-          label={itinerary ? "Refine this itinerary" : "Describe your trip"}
-          placeholder={
-            itinerary
-              ? "e.g. swap day 2's museum for something outdoors"
-              : undefined
+  // The landing is a full-bleed photo with no sidebar - nothing framing it,
+  // just the headline and the search bar at the bottom of the viewport. The
+  // sidebar only appears once there's a trip for it to navigate.
+  if (!itinerary) {
+    return (
+      <div className="min-h-[100svh] bg-canvas">
+        <LandingHero
+          status={
+            status === STATUS.ERROR ? (
+              <ErrorState message={error?.message} onRetry={handleRetry} />
+            ) : null
           }
-          submitLabel={itinerary ? "Apply change" : "Plan my trip"}
-          pendingLabel={itinerary ? "Applying…" : "Planning…"}
-          value={itinerary ? refinePromptText : promptText}
-          onChange={itinerary ? setRefinePromptText : setPromptText}
-          onSubmit={itinerary ? handleRefine : handleCreate}
-          disabled={status === STATUS.LOADING}
-          suggestionsOnSelect={itinerary ? undefined : setPromptText}
-        />
-
-        {status === STATUS.LOADING &&
-          (streamingText !== null ? (
-            <StreamingPreview text={streamingText} />
-          ) : (
-            <LoadingState />
-          ))}
-        {status === STATUS.ERROR && (
-          <ErrorState message={error?.message} onRetry={handleRetry} />
-        )}
-        {status === STATUS.IDLE && !itinerary && <EmptyState />}
-
-        {/* Rendered whenever we HAVE an itinerary, independent of the status
-            above - a failed refinement only means the *attempted* edit
-            didn't apply; the existing itinerary is still valid and
-            shouldn't disappear behind its own error message. Hidden while a
-            request is in flight so it's unambiguous which itinerary (old or
-            incoming) is on screen. */}
-        {itinerary && status !== STATUS.LOADING && (
-          <ItineraryView
-            itinerary={itinerary}
-            onRemoveStop={handleRemoveStop}
-            onMoveStop={handleMoveStop}
-            onToggleChecklistItem={handleToggleChecklistItem}
+        >
+          <TripForm
+            id="trip-prompt"
+            label="Describe your trip"
+            labelHidden
+            submitLabel="Plan my trip"
+            pendingLabel="Planning…"
+            value={promptText}
+            onChange={setPromptText}
+            onSubmit={handleCreate}
+            disabled={status === STATUS.LOADING}
+            // The live preview renders inside the box itself, so nothing
+            // else on the landing has to make room for it.
+            streamingText={status === STATUS.LOADING ? streamingText : null}
           />
-        )}
+        </LandingHero>
+
+        {/* The sidebar normally carries trip history; with no sidebar here,
+            this is the only way back to a saved trip from the landing. */}
+        <RecentTrips
+          history={history}
+          onLoadTrip={handleLoadTrip}
+          onDeleteTrip={handleDeleteTrip}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-[100svh] flex-col bg-canvas lg:flex-row">
+      <Sidebar
+        itinerary={itinerary}
+        view={view}
+        onViewChange={setView}
+        selectedDayId={selectedDay?.id ?? null}
+        onSelectDay={handleSelectDay}
+        onStartOver={handleStartOver}
+        history={history}
+        activeTripId={tripId}
+        onLoadTrip={handleLoadTrip}
+        onDeleteTrip={handleDeleteTrip}
+      />
+
+      <main className="min-w-0 flex-1">
+          <TripHero itinerary={itinerary} dayCount={itinerary.days.length} />
+
+          <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8 xl:max-w-4xl">
+            {view === VIEW.SUMMARY ? (
+              <SummaryView itinerary={itinerary} onSelectDay={handleSelectDay} />
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* A failed refinement only means the *attempted* edit didn't
+                    apply - the existing day is still valid and shouldn't
+                    disappear behind its own error message. It's hidden only
+                    while a request is in flight, so it's never ambiguous
+                    which itinerary (old or incoming) is on screen. */}
+                {status === STATUS.LOADING ? (
+                  <LoadingState />
+                ) : (
+                  selectedDay && (
+                    <DayCard
+                      key={selectedDay.id}
+                      day={selectedDay}
+                      onRemoveStop={handleRemoveStop}
+                      onMoveStop={handleMoveStop}
+                      onRenameStop={handleRenameStop}
+                      onReorderStop={handleReorderStop}
+                      onToggleChecklistItem={handleToggleChecklistItem}
+                    />
+                  )
+                )}
+
+                {status === STATUS.ERROR && (
+                  <ErrorState message={error?.message} onRetry={handleRetry} />
+                )}
+
+                <TripForm
+                  id="refine-prompt"
+                  label="Refine this itinerary"
+                  placeholder="e.g. swap day 2's museum for something outdoors"
+                  submitLabel="Apply change"
+                  pendingLabel="Applying…"
+                  value={refinePromptText}
+                  onChange={setRefinePromptText}
+                  onSubmit={handleRefine}
+                  disabled={status === STATUS.LOADING}
+                />
+              </div>
+            )}
+          </div>
       </main>
+
       {pendingUndo && (
         <UndoToast stopName={pendingUndo.stop.name} onUndo={handleUndoRemove} />
       )}

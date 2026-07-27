@@ -24,11 +24,16 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
+    // No `h-full`/`min-h-full` pair here on purpose: pinning <html> to
+    // height:100% while page sections ask for viewport-height units gives two
+    // competing definitions of "full height" and lets short windows overflow.
+    // The page containers own their own min-height; body just paints the
+    // canvas, which propagates to the whole viewport.
     <html
       lang="en"
-      className={`${golosText.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${golosText.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-canvas text-ink">{children}</body>
+      <body className="bg-canvas text-ink">{children}</body>
     </html>
   );
 }

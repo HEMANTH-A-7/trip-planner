@@ -12,7 +12,7 @@ export default function ChecklistBlock({ items, onToggle }) {
                 type="checkbox"
                 checked={item.checked}
                 onChange={() => onToggle(item.id)}
-                className="h-4 w-4 shrink-0 accent-accent-lavender"
+                className="h-5 w-5 shrink-0 accent-accent-lavender sm:h-4 sm:w-4"
               />
               <span className={item.checked ? "text-ink-subtle line-through" : "text-ink-muted"}>
                 {item.text}
