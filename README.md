@@ -75,9 +75,11 @@ on it, for hot reload.
    drag it earlier if it belongs somewhere else.
 5. **Refine in plain language** — "swap day 2's museum for something outdoors"
    edits the existing itinerary instead of regenerating it.
-5. **Remove a stop,** with an undo toast that restores its place in the day.
-6. **Tick off** a day's packing checklist.
-7. **Reload the page** — the current itinerary and your last ten trips persist
+6. **Remove a stop,** with an undo toast that restores its place in the day.
+7. **Tick off** a day's packing checklist. Every day gets its own, written
+   from that day's stops — the temple that asks for shoes off, the market that
+   only takes cash — rather than the same five lines repeated each morning.
+8. **Reload the page** — the current itinerary and your last ten trips persist
    in `localStorage`.
 
 ---
