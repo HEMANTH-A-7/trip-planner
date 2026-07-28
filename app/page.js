@@ -19,7 +19,7 @@ import {
   saveSession,
   saveToHistory,
 } from "@/lib/storage";
-import { stripIds } from "@/lib/schema";
+import { makeId, stripIds } from "@/lib/schema";
 import { applySchedule, readSchedule, withSchedule } from "@/lib/schedule";
 import { parseSSE } from "@/lib/sse";
 
@@ -61,6 +61,13 @@ function insertStopAt(itinerary, dayId, stop, index, schedule) {
       return { ...day, stops: applySchedule(stops, schedule) };
     }),
   };
+}
+
+// Appending is a structural change like any other, so it goes through mapDay
+// and the day's times rebuild around it: the new stop picks up a start time
+// that follows on from the last one, using the day's own typical gap.
+function appendStop(itinerary, dayId, stop) {
+  return mapDay(itinerary, dayId, (stops) => [...stops, stop]);
 }
 
 function moveStop(itinerary, dayId, stopId, direction) {
@@ -407,6 +414,13 @@ export default function Home() {
     setItinerary((prev) => updateStop(prev, dayId, stopId, patch));
   }
 
+  // The id is minted here rather than in the editor: a stop only becomes part
+  // of the trip when it's committed, and until then there's nothing for a
+  // React key to point at.
+  function handleAddStop(dayId, patch) {
+    setItinerary((prev) => appendStop(prev, dayId, { ...patch, id: makeId("stop") }));
+  }
+
   // Asks the model for one replacement stop and hands it straight back to the
   // card, which previews it and only writes to the itinerary if the traveler
   // accepts. Deliberately outside the requestId/abortController machinery the
@@ -415,7 +429,7 @@ export default function Home() {
   // touches global status, so the rest of the trip stays interactive while
   // one card is thinking. Resolves to a result object rather than throwing,
   // so the card can render the failure inline next to the field.
-  async function handleRequestSuggestion(dayId, stopIndex, instruction) {
+  async function requestStop(dayId, { instruction, stopIndex, slot }) {
     const dayIndex = itinerary.days.findIndex((day) => day.id === dayId);
     if (dayIndex === -1) {
       return { ok: false, message: "That day is no longer part of this trip." };
@@ -433,6 +447,7 @@ export default function Home() {
           itinerary: stripIds(itinerary),
           dayIndex,
           stopIndex,
+          slot,
         }),
         signal: controller.signal,
       });
@@ -456,6 +471,23 @@ export default function Home() {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  // Replacing the stop already in this slot.
+  function handleRequestSuggestion(dayId, stopIndex, instruction) {
+    return requestStop(dayId, { instruction, stopIndex, slot: "replace" });
+  }
+
+  // Writing a stop to go on the end of the day. Same endpoint, but there's no
+  // stop being replaced, so the server describes the position as "after the
+  // last one" instead of "instead of this one".
+  function handleRequestNewStopSuggestion(dayId, instruction) {
+    const day = itinerary.days.find((d) => d.id === dayId);
+    return requestStop(dayId, {
+      instruction,
+      stopIndex: day ? day.stops.length : 0,
+      slot: "append",
+    });
   }
 
   function handleSelectDay(dayId) {
@@ -613,7 +645,9 @@ export default function Home() {
                     onRemoveStop={handleRemoveStop}
                     onMoveStop={handleMoveStop}
                     onUpdateStop={handleUpdateStop}
+                    onAddStop={handleAddStop}
                     onRequestSuggestion={handleRequestSuggestion}
+                    onRequestNewStopSuggestion={handleRequestNewStopSuggestion}
                     onReorderStop={handleReorderStop}
                     onToggleChecklistItem={handleToggleChecklistItem}
                   />

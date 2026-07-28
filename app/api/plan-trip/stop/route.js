@@ -45,7 +45,11 @@ export async function POST(request) {
     return errorResponse(400, "bad_request", "Request body must be JSON.");
   }
 
-  const { instruction, itinerary, dayIndex, stopIndex } = body ?? {};
+  const { instruction, itinerary, dayIndex, stopIndex, slot } = body ?? {};
+  // "replace" swaps the stop already in this position; "append" writes a new
+  // one for the end of the day. Defaulted rather than required so an older
+  // client still gets the original behaviour.
+  const isAppend = slot === "append";
 
   if (typeof instruction !== "string" || instruction.trim().length === 0) {
     return errorResponse(400, "bad_request", "Describe the change you want first.");
@@ -68,8 +72,18 @@ export async function POST(request) {
   if (!day) {
     return errorResponse(400, "bad_request", "That day is no longer part of this trip.");
   }
-  if (!Number.isInteger(stopIndex) || stopIndex < 0 || stopIndex >= day.stops.length) {
-    return errorResponse(400, "bad_request", "That stop is no longer part of this day.");
+  // Appending addresses the position after the last stop, which is one past
+  // the end of the array - a legitimate target here, and out of bounds for a
+  // replace.
+  const maxIndex = isAppend ? day.stops.length : day.stops.length - 1;
+  if (!Number.isInteger(stopIndex) || stopIndex < 0 || stopIndex > maxIndex) {
+    return errorResponse(
+      400,
+      "bad_request",
+      isAppend
+        ? "That day is no longer part of this trip."
+        : "That stop is no longer part of this day."
+    );
   }
 
   const timeoutController = new AbortController();
@@ -83,12 +97,15 @@ export async function POST(request) {
       day,
       slot: {
         index: stopIndex,
-        // The slot's own time, which the replacement has to keep - the point
-        // of editing one card is that the rest of the day stays put.
-        time: day.stops[stopIndex].time,
-        current: day.stops[stopIndex],
+        append: isAppend,
+        // A replacement inherits the slot's own start time - the point of
+        // editing one card is that the rest of the day stays put. A new stop
+        // on the end has no time of its own to inherit: the client derives it
+        // from the stop before it.
+        time: isAppend ? null : day.stops[stopIndex].time,
+        current: isAppend ? null : day.stops[stopIndex],
         previous: day.stops[stopIndex - 1] ?? null,
-        next: day.stops[stopIndex + 1] ?? null,
+        next: isAppend ? null : day.stops[stopIndex + 1] ?? null,
       },
       abortSignal: timeoutController.signal,
     });
@@ -114,6 +131,15 @@ export async function POST(request) {
   // The slot owns its start time, so a model that ignored the instruction to
   // echo it back doesn't get to reschedule the day. Everything else is the
   // model's to change.
+  //
+  // On an append there is no slot time yet, and any time the model invented
+  // is one the client recomputes anyway - so it's dropped rather than shown
+  // in the preview, where it would read as a promise the day won't keep.
+  if (isAppend) {
+    const { time: _invented, ...stop } = result.stop;
+    return Response.json({ stop });
+  }
+
   return Response.json({
     stop: {
       ...result.stop,

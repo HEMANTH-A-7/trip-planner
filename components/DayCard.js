@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { Plus } from "lucide-react";
 import useDragSort from "@/lib/useDragSort";
 import { mainStopId } from "@/lib/tripStats";
 import StopCard from "./StopCard";
+import StopEditor from "./StopEditor";
 import ChecklistBlock from "./ChecklistBlock";
 
 export default function DayCard({
@@ -11,10 +14,17 @@ export default function DayCard({
   onRemoveStop,
   onMoveStop,
   onUpdateStop,
+  onAddStop,
   onRequestSuggestion,
+  onRequestNewStopSuggestion,
   onReorderStop,
   onToggleChecklistItem,
 }) {
+  // A new stop is always composed at the end of the day, then dragged into
+  // place with the reordering that already exists - rather than a plus in
+  // every gap, which put a control between every pair of cards for something
+  // the day can already do.
+  const [adding, setAdding] = useState(false);
   // The drag lives here rather than in StopCard: it's a relationship between
   // two cards, and this is the component that knows about both.
   // One stop per day carries the accent, so a day has a focal point instead
@@ -94,6 +104,34 @@ export default function DayCard({
             );
           })}
         </ul>
+      )}
+
+      {adding ? (
+        <div className="mt-2.5 rounded-[18px] border border-dashed border-accent bg-surface-2 p-3.5 sm:rounded-[20px] sm:p-4">
+          <p className="type-label mb-3 text-accent">New stop</p>
+          <StopEditor
+            intent="create"
+            fieldId={`${day.id}-new`}
+            defaultCurrency={defaultCurrency}
+            onSave={(patch) => {
+              onAddStop(day.id, patch);
+              setAdding(false);
+            }}
+            onCancel={() => setAdding(false)}
+            onRequestSuggestion={(instruction) =>
+              onRequestNewStopSuggestion(day.id, instruction)
+            }
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[18px] border border-dashed border-hairline px-4 py-3 text-[13px] font-medium text-ink-subtle transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:rounded-[20px]"
+        >
+          <Plus size={15} aria-hidden />
+          Add a stop
+        </button>
       )}
 
       {day.packingChecklist?.length > 0 && (

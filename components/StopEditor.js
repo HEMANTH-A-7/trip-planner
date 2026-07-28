@@ -50,17 +50,22 @@ function Label({ htmlFor, children }) {
   );
 }
 
+// Used for both editing a stop that exists and composing one that doesn't:
+// the fields are the same either way, and so is the AI tab - a new stop just
+// starts blank. `intent` picks the wording.
 export default function StopEditor({
-  stop,
+  stop = {},
   fieldId,
   defaultCurrency,
+  intent = "edit",
   onSave,
   onCancel,
   onRequestSuggestion,
 }) {
+  const isCreate = intent === "create";
   const [mode, setMode] = useState(MODE.MANUAL);
 
-  const [name, setName] = useState(stop.name);
+  const [name, setName] = useState(stop.name ?? "");
   const [time, setTime] = useState(stop.time ?? "");
   const [category, setCategory] = useState(stop.category ?? "");
   const [duration, setDuration] = useState(
@@ -216,18 +221,24 @@ export default function StopEditor({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor={`${fieldId}-time`}>Time</Label>
-              <input
-                id={`${fieldId}-time`}
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                maxLength={LIMITS.time}
-                placeholder="09:00 AM"
-                className={fieldClass()}
-              />
-            </div>
+          <div className={isCreate ? "" : "grid grid-cols-2 gap-3"}>
+            {/* No time field on a new stop: it lands at the end of the day, so
+                the schedule works out when it starts from what comes before
+                it. A box here would offer a value applySchedule immediately
+                overwrites. Add it, then edit it if you want a specific time. */}
+            {!isCreate && (
+              <div>
+                <Label htmlFor={`${fieldId}-time`}>Time</Label>
+                <input
+                  id={`${fieldId}-time`}
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                  maxLength={LIMITS.time}
+                  placeholder="09:00 AM"
+                  className={fieldClass()}
+                />
+              </div>
+            )}
             <div>
               <Label htmlFor={`${fieldId}-category`}>Category</Label>
               <select
@@ -316,7 +327,7 @@ export default function StopEditor({
               disabled={!trimmedName}
               className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-canvas disabled:opacity-40"
             >
-              Save changes
+              {isCreate ? "Add stop" : "Save changes"}
             </button>
           </div>
         </div>
@@ -331,12 +342,17 @@ export default function StopEditor({
               maxLength={LIMITS.instruction}
               rows={3}
               autoFocus
-              placeholder="e.g. swap this for a rooftop dinner nearby, or make it the Egyptian Museum instead"
+              placeholder={
+                isCreate
+                  ? "e.g. somewhere to watch the sunset, or a late dinner nearby"
+                  : "e.g. swap this for a rooftop dinner nearby, or make it the Egyptian Museum instead"
+              }
               className={fieldClass("resize-none leading-relaxed")}
             />
             <p className="mt-1 text-[11px] leading-relaxed text-ink-subtle">
-              The AI keeps this slot&rsquo;s time and fits the change around the stops
-              before and after it.
+              {isCreate
+                ? "The AI picks something that follows on from the day’s last stop. You can drag it earlier once it’s added."
+                : "The AI keeps this slot’s time and fits the change around the stops before and after it."}
             </p>
           </div>
 
@@ -352,7 +368,7 @@ export default function StopEditor({
           {suggestion && (
             <div className="rounded-xl border border-dashed border-accent bg-surface p-3">
               <p className="type-label mb-1.5 text-[10px]">
-                Suggested replacement
+                {isCreate ? "Suggested stop" : "Suggested replacement"}
               </p>
               <p className="text-sm font-semibold text-ink">{suggestion.name}</p>
               {suggestion.description && (

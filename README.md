@@ -69,7 +69,11 @@ on it, for hot reload.
    cards you swapped — move a three-hour museum into the morning and everything
    after it shifts (see [Scheduling](#scheduling)).
 3. **Edit a stop by hand,** or ask the AI to replace just that one stop.
-4. **Refine in plain language** — "swap day 2's museum for something outdoors"
+4. **Add a stop** — "Add a stop" under the day opens the same editor, blank.
+   Fill it in yourself or ask the AI for something that follows on from the
+   day. It lands at the end and picks up a start time from the stop before it;
+   drag it earlier if it belongs somewhere else.
+5. **Refine in plain language** — "swap day 2's museum for something outdoors"
    edits the existing itinerary instead of regenerating it.
 5. **Remove a stop,** with an undo toast that restores its place in the day.
 6. **Tick off** a day's packing checklist.
@@ -139,14 +143,16 @@ app/
   api/
     plan-trip/route.js        POST — prompt → Gemini (→ OpenRouter) → validated JSON
     plan-trip/stream/route.js POST — same, streamed as Server-Sent Events
-    plan-trip/stop/route.js   POST — regenerate a single stop
+    plan-trip/stop/route.js   POST — regenerate one stop, or write a new
+                                     one for the end of a day
     hero-image/route.js       GET  — destination → Pexels photo, cached 30 days
 
 components/
   TripForm.js                 Free-text input, shared by create and refine
   DayCard.js                  One day: its stops and checklist
   StopCard.js                 One stop: expand, edit, remove, drag
-  StopEditor.js               Inline edit form, including AI-suggest per stop
+  StopEditor.js               Inline form for editing a stop or adding a
+                              new one, including AI-suggest per stop
   TripOverviewChart.js        Stops-by-category bar chart
   ChecklistBlock.js           Per-day packing checklist
   HeroBackdrop.js             Crossfading hero imagery
