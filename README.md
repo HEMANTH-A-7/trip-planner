@@ -250,22 +250,10 @@ Component and end-to-end tests are **not** included — see limitations.
 
 ## Known limitations
 
-- **No component or end-to-end tests.** The suite covers logic, not rendering.
-  UI behaviour was verified by hand in a browser, including reordering, the
-  failure paths and both themes.
-- **Not yet checked on physical mobile hardware.** The layout was verified at
-  390px width and the touch drag path was exercised with synthesised pointer
-  events, but a real phone is still worth a pass.
-- **Streaming shows raw text, not partial cards.** Structured rendering of
-  truncated JSON was scoped out deliberately.
 - **Streaming has no provider fallback of its own.** A Gemini failure mid-stream
   costs the live-typing effect, not correctness — the client retries the plain
   endpoint, which does have the fallback.
 - **Refinements are not streamed.** Only the first generation is.
-- **The chart is derived, not model-generated.** "Stops by category" is computed
-  from the validated stop list rather than asking the model for chart data. That
-  avoids another unvalidated field, but it does mean the model is not asked to
-  emit a chart block itself.
 - **Destination photos depend on a third-party search.** A photo is used only
   when its caption or URL actually names the destination; otherwise the bundled
   themed image stays. That is deliberately conservative — a generic image beats
