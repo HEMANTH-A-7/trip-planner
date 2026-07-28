@@ -10,6 +10,7 @@ screen. A prompt goes in, structured data comes back, and every pixel after
 that is React state you can edit.
 
 **Live:** https://trip-planner-dusky-nine.vercel.app
+**Demo-Video:** [Screenrecording-link](https://drive.google.com/file/d/18V9xDLJ73tb1bl5VPr4MBJNSCU5U-7A2/view?usp=sharing)
 
 ---
 
