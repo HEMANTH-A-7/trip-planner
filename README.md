@@ -96,14 +96,21 @@ drift apart). That steering is a hint, not a guarantee, so the raw text is
 still `JSON.parse`d inside a `try/catch` and run through `safeParse` regardless
 of how confidently the model claims to have followed instructions.
 
-| Failure            | What happens                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **Malformed JSON** | `parseAndValidateItinerary()` catches the parse error and returns a typed `bad_shape` failure                        |
-| **Wrong shape**    | `ItinerarySchema.safeParse` rejects it; the issues are logged server-side and the user gets a retry                  |
-| **Empty**          | `days` has `.min(1)`, so an empty itinerary fails validation instead of rendering as a blank success                 |
-| **Slow**           | A 30s server budget (`AbortController`) and a 35s client timeout, both surfacing a retryable error                   |
-| **Failed / 429**   | Classified in `lib/providerErrors.js`; if Gemini reports itself *unavailable*, OpenRouter is retried transparently   |
-| **Stale response** | Guarded by a request counter — see below                                                                            |
+| Failure                | What happens                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Malformed JSON**     | `parseAndValidateItinerary()` catches the parse error and returns a typed `bad_shape` failure                          |
+| **Wrong shape**        | `ItinerarySchema.safeParse` rejects it; the issues are logged server-side and the user gets a retry                    |
+| **Empty**              | `days` has `.min(1)`, so an empty itinerary fails validation instead of rendering as a blank success                   |
+| **Slow**               | A 30s server budget (`AbortController`) and a 35s client timeout, both surfacing a retryable error                     |
+| **Failed / 429**       | Classified in `lib/providerErrors.js`; if Gemini reports itself *unavailable*, OpenRouter is retried — [see below](#fallbacks) |
+| **Stale response**     | Guarded by a request counter — see below                                                                              |
+| **One bad stop**       | `parseAndValidateStop()` validates a single-stop response the same way; a failure renders inline on that card and the rest of the trip is untouched |
+| **Over-long field**    | Bounds live in the schema and are mirrored in the editor, so a hand edit can't create an itinerary the next refine would reject |
+
+Bounds are set above what the prompt asks for, deliberately. A checklist line
+three words longer than requested should not fail a whole itinerary as
+`bad_shape` — the cap is there to stop a runaway response, not to enforce
+house style.
 
 ### Stale responses
 
@@ -121,18 +128,55 @@ Every state write is guarded by `isStale()`, and the previous request's
 authority: aborting alone is not enough, because a response already in flight
 can still resolve after the abort lands.
 
+### Fallbacks
+
+There are five, and they cover different things — a provider being down, a
+transport failing, and data simply not arriving.
+
+**1. Gemini → OpenRouter (provider).** Only when Gemini reports that *Gemini*
+is the problem. `classifyGeminiError()` marks `unavailable: true` for 401/403
+(bad key), 429 (quota) and a missing key; everything else — timeouts, a 500
+from the model, a network error — is `unavailable: false` and is not retried
+elsewhere. Retrying a different provider because the request itself was wrong
+just spends someone else's quota to get the same answer. If the fallback also
+fails, the original Gemini error is what surfaces.
+
+**2. Streaming → the plain endpoint (transport).** `/stream` has no provider
+fallback of its own; if it fails at any point the client catches it and reruns
+the plain `/api/plan-trip`, which does. A mid-stream failure costs the
+live-typing effect, not the result.
+
+**3. Hero photo → a bundled themed image.** If the Pexels lookup fails, times
+out, or can't confidently tell the photo is actually of the destination, the
+bundled image for the trip's `heroTheme` stays and nothing is said about it. A
+generic photo beats a confidently wrong one, and only a real photo is credited.
+
+**4. Missing rollups → a dash.** `distanceKm` and `estimatedBudget` are
+optional, so a response that skips them renders a tile with an em dash instead
+of the row collapsing to two tiles.
+
+**5. No usable times → simpler scheduling.** A day the model gave no parseable
+time to is left alone rather than having times invented for it, and a stop with
+no duration contributes zero to the day's arithmetic instead of breaking it.
+
 ### Degrading instead of breaking
 
 Several paths deliberately do something reasonable rather than error:
 
 - A **failed refinement** leaves the existing itinerary on screen. The attempted
   edit did not apply, but the day you already had is still valid.
-- If **streaming fails** partway through, the client quietly retries the plain
-  endpoint — which carries the provider fallback the stream does not.
-- If a trip's **hero photo lookup** fails, times out, or cannot confidently
-  identify the destination, the bundled themed image stays and nothing is said.
-- A day with **no durations** falls back to simpler scheduling rather than
-  producing nonsense times.
+- A **failed AI suggestion** for one stop renders next to the field it came
+  from. It never touches global status, so the rest of the trip stays
+  interactive while one card is thinking.
+- An **AI suggestion you don't accept** changes nothing — it's a preview, and
+  accepting it only fills the editor's fields, so it can still be adjusted or
+  abandoned before saving.
+- A **time the model invents for an appended stop** is dropped rather than
+  shown. The slot owns the time, so the app recomputes it; echoing the model's
+  guess into the preview would promise something the day won't keep.
+- **Removing a stop** is reversible for five seconds, and undo restores the
+  schedule captured before the removal rather than re-deriving one from the
+  shortened day.
 
 ---
 
@@ -201,6 +245,13 @@ minus that stop's own duration. On reorder, **durations travel with the stop
 and gaps stay with the slot** — so moving a long stop earlier genuinely pushes
 the rest of the day later. `lib/schedule.js`, covered by unit tests.
 
+Adding, removing and reordering all run through the same path (`mapDay` →
+`withSchedule`), which is why a new stop has no time field: the slot owns the
+time, and where the card sits is what decides it. Undo is the one exception —
+it reapplies the schedule captured *before* the removal, because re-deriving
+one from the shortened day would put everything after the restored stop an
+hour early.
+
 ---
 
 ## Stretch goals
@@ -208,7 +259,12 @@ the rest of the day later. `lib/schedule.js`, covered by unit tests.
 Every optional item in the brief is implemented:
 
 - **Different block types** — stop cards, a category bar chart and per-day
-  checklists, each rendered by its own component.
+  checklists, each rendered by its own component. Every day gets its own
+  checklist, written from that day's stops rather than the trip, so the second
+  morning's list isn't a copy of the first.
+- **Editing beyond reordering** — a stop can be edited field by field, replaced
+  by the AI in place, or added from scratch at the end of a day, by hand or
+  with the AI. Every edit is local state; only the AI paths cost a request.
 - **Streaming** — the first generation streams over SSE with a live preview
   inside the search box. Deliberately *not* incremental structured rendering:
   reliably repairing truncated JSON is its own problem, and the value here is
@@ -245,7 +301,9 @@ against malformed fixtures, provider error classification, schedule arithmetic
 across every permutation of a day, drag geometry with uneven card heights, and
 cost and duration formatting.
 
-Component and end-to-end tests are **not** included — see limitations.
+Component and end-to-end tests are **not** included; UI behaviour was verified
+by hand in a browser instead, including reordering, the failure paths and both
+themes.
 
 ---
 
@@ -261,6 +319,22 @@ Component and end-to-end tests are **not** included — see limitations.
   a confidently wrong one.
 - **OpenRouter's free model is a fallback of convenience.** Free-tier
   availability there can change without notice.
+- **The provider fallback shares the primary's time budget, and often loses
+  it.** Gemini and OpenRouter are handed the same `AbortController`, so
+  whatever Gemini spent before failing is gone. Observed in the logs: Gemini
+  returned 429 eleven seconds in, OpenRouter was called with the remaining
+  nineteen, and aborted at the 30s mark — leaving the original 429 as the
+  visible error, which reads as "no fallback configured" when in fact it ran.
+  The fix is a separate budget for the fallback, which needs the 35s client
+  timeout raised to match; both numbers are documented above, so this is a
+  deliberate open item rather than an oversight.
+- **A timeout never reaches the fallback.** Only 401/403 and 429 mark Gemini
+  `unavailable`. That is the right call for a wrong request, but it does mean
+  the slowest failure — the one most likely on a long trip — is the one with
+  no second provider behind it.
+- **Longer trips run closer to the timeout than they used to.** Per-day
+  checklists add output, and a 5-day itinerary sits near the 30s budget. Four
+  days is comfortable; six may not be.
 
 ---
 
