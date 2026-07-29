@@ -319,19 +319,6 @@ themes.
   a confidently wrong one.
 - **OpenRouter's free model is a fallback of convenience.** Free-tier
   availability there can change without notice.
-- **The provider fallback shares the primary's time budget, and often loses
-  it.** Gemini and OpenRouter are handed the same `AbortController`, so
-  whatever Gemini spent before failing is gone. Observed in the logs: Gemini
-  returned 429 eleven seconds in, OpenRouter was called with the remaining
-  nineteen, and aborted at the 30s mark — leaving the original 429 as the
-  visible error, which reads as "no fallback configured" when in fact it ran.
-  The fix is a separate budget for the fallback, which needs the 35s client
-  timeout raised to match; both numbers are documented above, so this is a
-  deliberate open item rather than an oversight.
-- **A timeout never reaches the fallback.** Only 401/403 and 429 mark Gemini
-  `unavailable`. That is the right call for a wrong request, but it does mean
-  the slowest failure — the one most likely on a long trip — is the one with
-  no second provider behind it.
 - **Longer trips run closer to the timeout than they used to.** Per-day
   checklists add output, and a 5-day itinerary sits near the 30s budget. Four
   days is comfortable; six may not be.
