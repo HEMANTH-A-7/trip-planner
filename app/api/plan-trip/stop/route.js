@@ -3,11 +3,13 @@ import { callOpenRouterStop } from "@/lib/openrouter";
 import { ItinerarySchema, parseAndValidateStop } from "@/lib/schema";
 import { ProviderError, classifyGeminiError } from "@/lib/providerErrors";
 
+export const maxDuration = 60;
+
 // Shorter than the whole-itinerary budget in ../route.js on purpose: this
 // generates one stop, inline, while the traveler watches a card spinner. If
 // it can't answer in this long it's better to fail and let them type the
-// change themselves than to hold the card hostage for half a minute.
-const REQUEST_TIMEOUT_MS = 20_000;
+// change themselves than to hold the card hostage.
+const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_INSTRUCTION_LENGTH = 500;
 
 function errorResponse(status, code, message) {

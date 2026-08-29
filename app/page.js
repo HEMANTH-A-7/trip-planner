@@ -23,10 +23,10 @@ import { makeId, stripIds } from "@/lib/schema";
 import { applySchedule, readSchedule, withSchedule } from "@/lib/schedule";
 import { parseSSE } from "@/lib/sse";
 
-// Slightly above the server's own 30s timeout, so if the server hangs for
-// any reason (cold start, network stall) the client still recovers on its
-// own instead of spinning forever.
-const CLIENT_TIMEOUT_MS = 35_000;
+// Above the server's own budgets (streaming 45s; non-streaming up to a 25s
+// Gemini try + a 30s OpenRouter fallback), so if the server hangs for any
+// reason the client still recovers on its own instead of spinning forever.
+const CLIENT_TIMEOUT_MS = 60_000;
 const UNDO_TIMEOUT_MS = 5_000;
 
 const STATUS = { IDLE: "idle", LOADING: "loading", ERROR: "error", SUCCESS: "success" };

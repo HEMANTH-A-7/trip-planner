@@ -3,34 +3,55 @@ import { callOpenRouter } from "@/lib/openrouter";
 import { ItinerarySchema, parseAndValidateItinerary } from "@/lib/schema";
 import { ProviderError, classifyGeminiError } from "@/lib/providerErrors";
 
-// Gemini can hang or take a very long time on a bad day. Cap it so the
-// request always resolves one way or another within a bounded time, instead
-// of leaving the client's loading state spinning forever. This budget is
-// shared across the Gemini attempt AND the OpenRouter fallback below, so a
-// slow Gemini failure can't add its own 30s on top of the fallback's.
-const REQUEST_TIMEOUT_MS = 30_000;
+// The two-provider chain below can legitimately run longer than a platform's
+// default function limit. Allow the full window (60s is the ceiling on
+// Vercel's Hobby plan, and well within Pro's).
+export const maxDuration = 60;
+
+// Each provider gets its OWN bounded budget rather than sharing one: a fast
+// Gemini failure (a 503 bounced back in a few seconds) must still leave the
+// OpenRouter fallback a full window to answer in, not whatever scraps are
+// left on a shared clock.
+const GEMINI_TIMEOUT_MS = 25_000;
+const FALLBACK_TIMEOUT_MS = 30_000;
 const MAX_PROMPT_LENGTH = 2000;
 
 function errorResponse(status, code, message) {
   return Response.json({ error: code, message }, { status });
 }
 
-// Tries Gemini first (the primary, fully-validated provider). If Gemini is
-// specifically *unavailable* (rate limited or misconfigured) and an
-// OpenRouter key is present, transparently retries via OpenRouter rather than
-// failing the whole request - a single provider hiccup shouldn't take the
-// app down. Any other Gemini failure (timeout, one-off upstream error) is
-// returned as-is; retrying those against a second provider wouldn't be more
-// reliable, just slower.
-async function generateItineraryText(params) {
+// Runs `fn` with a fresh AbortSignal that trips after `ms`, so a hung upstream
+// call can't outlive its budget.
+async function withTimeout(ms, fn) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await callGemini(params);
+    return await fn(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Tries Gemini first (the primary, fully-validated provider). If Gemini is
+// specifically *unavailable* (rate limited, overloaded, or misconfigured) and
+// an OpenRouter key is present, transparently retries via OpenRouter rather
+// than failing the whole request - a single provider hiccup shouldn't take
+// the app down. A Gemini timeout is returned as-is: it already spent the
+// whole primary budget, so a second slow provider would just make the user
+// wait longer for the same disappointment.
+async function generateItineraryText({ mode, prompt, currentItinerary }) {
+  try {
+    return await withTimeout(GEMINI_TIMEOUT_MS, (abortSignal) =>
+      callGemini({ mode, prompt, currentItinerary, abortSignal })
+    );
   } catch (err) {
     console.error("Gemini call failed:", err);
-    const classified = classifyGeminiError(err, params.abortSignal.aborted);
+    const classified = classifyGeminiError(err, err?.name === "AbortError");
     if (classified.unavailable && process.env.OPENROUTER_API_KEY) {
       try {
-        const text = await callOpenRouter(params);
+        const text = await withTimeout(FALLBACK_TIMEOUT_MS, (abortSignal) =>
+          callOpenRouter({ mode, prompt, currentItinerary, abortSignal })
+        );
         console.warn("Gemini unavailable - served this request via the OpenRouter fallback.");
         return text;
       } catch (fallbackErr) {
@@ -75,19 +96,12 @@ export async function POST(request) {
     }
   }
 
-  const timeoutController = new AbortController();
-  const timeout = setTimeout(
-    () => timeoutController.abort(),
-    REQUEST_TIMEOUT_MS
-  );
-
   let rawText;
   try {
     rawText = await generateItineraryText({
       mode: isRefine ? "refine" : "create",
       prompt: prompt.trim(),
       currentItinerary: isRefine ? itinerary : undefined,
-      abortSignal: timeoutController.signal,
     });
   } catch (err) {
     if (err instanceof ProviderError) {
@@ -99,8 +113,6 @@ export async function POST(request) {
       "upstream_error",
       "Couldn't reach the AI service. Please try again."
     );
-  } finally {
-    clearTimeout(timeout);
   }
 
   const result = parseAndValidateItinerary(rawText);

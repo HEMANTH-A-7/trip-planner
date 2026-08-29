@@ -16,7 +16,11 @@ import { classifyGeminiError } from "@/lib/providerErrors";
 // has the full Gemini-then-OpenRouter fallback chain. Streaming is additive:
 // if it doesn't work, the app quietly falls back to what already does.
 
-const REQUEST_TIMEOUT_MS = 30_000;
+// Match the request timeout so the platform doesn't cut a slow stream short
+// of its own budget (60s is the Vercel Hobby ceiling).
+export const maxDuration = 60;
+
+const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_PROMPT_LENGTH = 2000;
 
 function sse(event) {
